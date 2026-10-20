@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'; frame-src 'none'; object-src 'none'; media-src 'none'; worker-src 'none'">
 <meta name="robots" content="noindex, nofollow">
 <title>Integrated Journey Prototype (concept)</title>
-<!-- Integrated Journey Prototype (concept, guided) · built 2026-10-20 19:02 · source 000d02411c7b · 48 files · Concept prototype: synthetic data, illustrative numbers, no affiliation with any bank or insurer -->
+<!-- Integrated Journey Prototype (concept, guided) · built 2026-10-20 21:03 · source 2ee6e3ae7a30 · 48 files · Concept prototype: synthetic data, illustrative numbers, no affiliation with any bank or insurer -->
 <style>
 /* ---- css/tokens.css ---- */
 /* tokens.css: the neutral palette and the insurer skins. Components read only the --c-* variables, so a skin class swaps the look. */
@@ -2095,12 +2095,14 @@ IJP.B = {
 
 IJP.P = {
   client:{id:'ananya', name:'Ananya Rao', first:'Ananya', init:'AR', age:46, seg:'Premium client',
-    res:'Singapore permanent resident, born in India', job:'Director at a multinational technology firm', cif:'SG-0047-1192', email:'ananya.rao@example.com'},
+    res:'Singapore permanent resident, born in India', job:'Director at a multinational technology firm', cif:'SG-0047-1192', email:'ananya.rao@example.com',
+    /* One synthetic masked identifier, shared by every screen that shows it (motor, the needs analysis, the life application). */
+    nric:'S••••471J', dob:'12 May 1980'},
   family:[
-    {id:'ananya', name:'Ananya', rel:'Client', age:46, init:'A'},
-    {id:'vikram', name:'Vikram', rel:'Spouse', age:48, init:'V'},
-    {id:'meera', name:'Meera', rel:'Daughter', age:18, init:'M', note:'Started university in London, Sep 2026'},
-    {id:'kabir', name:'Kabir', rel:'Son', age:12, init:'K'}
+    {id:'ananya', name:'Ananya', rel:'Client', age:46, init:'A', dob:'12 May 1980'},
+    {id:'vikram', name:'Vikram', rel:'Spouse', age:48, init:'V', dob:'2 Aug 1978'},
+    {id:'meera', name:'Meera', rel:'Daughter', age:18, init:'M', dob:'3 Feb 2008', note:'Started university in London, Sep 2026'},
+    {id:'kabir', name:'Kabir', rel:'Son', age:12, init:'K', dob:'19 Jan 2014'}
   ],
   rm:{name:'Marcus Tan', first:'Marcus', init:'MT', role:'Premium relationship manager', place:'Global Bank Premium Centre'},
   is:{name:'Priya Nair', first:'Priya', init:'PN', role:'Insurance specialist', lic:'Employed by the bank · licensed to advise on life and health'},
@@ -2133,10 +2135,16 @@ IJP.OBJECTIVES = [
 IJP.HORIZONS = [{id:'<5', label:'Under 5 years'}, {id:'5-10', label:'5 to 10 years'}, {id:'>10', label:'Over 10 years'}];
 
 /* Personal data packet per carrier: what each carrier's system receives (shown at consent, C13). */
+/* The life insurer's packet follows the lives actually on its application (IJP.lifeLives): the people on the Shield plan
+   are named from the recommendation, never a fixed list. */
+const andNames = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 IJP.PACKETS = {
   life:{carrier:'The life insurer', purpose:'Advice and application for life cover and retail medical cover',
-    fields:['Ananya: name, date of birth, NRIC (masked), contact details','Occupation and income band','Goals and needs analysis inputs','Family: names, ages, where each lives, years of support and education goals (from the needs analysis)','Existing cover summary (life and medical)','Vikram and Kabir: name and date of birth (retail medical)','Case ID '+IJP.P.caseId],
-    not:['Anything about the other insurer\'s application','Meera\'s quote, application and health answers for the international health insurer','Bank balances and transactions']},
+    get fields(){ const L = IJP.lifeLives ? IJP.lifeLives() : {retail:['ananya','vikram','kabir']}, others = L.retail.filter(id => id!==IJP.P.client.id).map(id => IJP.person(id).name);
+      return ['Ananya: name, date of birth, NRIC (masked), contact details','Occupation and income band','Goals and needs analysis inputs','Family: names, ages, where each lives, years of support and education goals (from the needs analysis)','Existing cover summary (life and medical)']
+        .concat(others.length ? [andNames(others)+': name and date of birth (retail medical)'] : [], ['Case ID '+IJP.P.caseId]); },
+    get not(){ const L = IJP.lifeLives ? IJP.lifeLives() : {retail:[]};
+      return ['Anything about the other insurer\'s application'].concat(L.retail.includes('meera') ? [] : ['Meera\'s quote, application and health answers for the international health insurer'], ['Bank balances and transactions']); }},
   intl:{carrier:'The international health insurer', purpose:'Quotation and application for Meera\'s international medical cover',
     fields:['Meera: name, date of birth, nationality, country of residence (UK, student)','Ananya as payer: name, contact details','Plan, area of cover and deductible chosen','Case ID '+IJP.P.caseId],
     not:['Ananya\'s income, goals or needs analysis','Anything about the other insurer\'s application','Bank balances and transactions']}
@@ -2152,7 +2160,7 @@ IJP.OUTREACH_DEFAULT = {
 
 /* ---------- the case record ---------- */
 IJP.seed = () => ({
-  v:9, progress:0, visited:{},
+  v:10, progress:0, visited:{},
   /* hero = RM-led, three products. health-intl / health-local = the client started a health purchase in the Health tab
      (an alternate journey that links back into the same quote, application, cart and checkout). */
   path:'hero', pathNote:null,
@@ -2199,16 +2207,22 @@ IJP.seed = () => ({
   ledger:[]
 });
 
-/* Story clock: the RM call is Mon 19 Oct, the sitting is Thu 22 Oct, issuance the week after. */
+/* One story clock: the RM call is Mon 19 Oct, the sitting is Thu 22 Oct, and the insurers decide the week after, on Wed 28 Oct.
+   Every date the screens show, and every "in n days", reads it. */
+IJP.STORY = {call:'Mon 19 Oct', sitting:'Thu 22 Oct', decided:'Wed 28 Oct', year:2026};
 IJP.presetLabel = n => ({goals:'goals set', checked:'pre-trade check passed', referred:'referred to Priya', arrived:'meeting started', reviewed:'goals reviewed',
   fna:'needs analysis done', recommended:'recommendation made', shared:'consent to share given', intl:'international health application in the cart', quoted:'life insurer applications in the cart',
   consented:'submission authorised', submitted:'applications submitted', issued:'policies issued'})[n] || n;
 IJP.storyTime = () => {
-  const s = IJP.state, p = s ? IJP.level() : 0, i = n => IJP.msIndex(n);
-  if(p >= i('issued')) return 'Wed 28 Oct';
-  if(p >= i('arrived')) return 'Thu 22 Oct';
-  return 'Mon 19 Oct';
+  const s = IJP.state, p = s ? IJP.level() : 0, i = n => IJP.msIndex(n), T = IJP.STORY;
+  if(p >= i('issued') || (s && ['life','intl'].some(k => s.tracks[k] && s.tracks[k].stage==='declined'))) return T.decided;
+  if(p >= i('arrived')) return T.sitting;
+  return T.call;
 };
+const MONTHS = {Jan:0, Feb:1, Mar:2, Apr:3, May:4, Jun:5, Jul:6, Aug:7, Sep:8, Oct:9, Nov:10, Dec:11};
+const dayOf = txt => { const m = /(\d{1,2}) ([A-Z][a-z]{2})(?: (\d{4}))?/.exec(String(txt||'')); return m && MONTHS[m[2]]!=null ? Date.UTC(m[3] ? +m[3] : IJP.STORY.year, MONTHS[m[2]], +m[1]) : null; };
+/* Days from the story's current day to a date such as "2 Nov 2026" (null if the text holds no date). */
+IJP.daysUntil = txt => { const d = dayOf(txt), now = dayOf(IJP.storyTime()); return d==null || now==null ? null : Math.round((d-now)/86400000); };
 
 /* ---------- shared maths (illustrative) ---------- */
 const calc = IJP.calc = {};
@@ -2269,6 +2283,11 @@ calc.travel = (plan, travellers, days) => {
 /* Totals and subtotals use the final premium, so a rated outcome shows the same loaded figure in every total. */
 calc.cartTotal = (carrier) => (IJP.state.cart||[]).filter(i => i.status==='in' && (!carrier || i.carrier===carrier)).reduce((a,b) => a+calc.finalPremium(b), 0);
 calc.cartCarriers = () => [...new Set((IJP.state.cart||[]).filter(i => i.status==='in').map(i => i.carrier))];
+/* The premium debit Ananya authorises: the final premiums of the cart items whose insurer she approved at checkout. One
+   function feeds C14, the debit fingerprint, the recorded amount, the ledger, the submission and every later display
+   (C15, I12, R08), so a declined insurer's premium is never part of it. */
+calc.authorisedTotal = (s) => { s = s || IJP.state; const c = (s.checkout && s.checkout.consent) || {};
+  return (s.cart||[]).filter(i => i.status==='in' && c[i.carrier]==='approved').reduce((a,b) => a+calc.finalPremium(b, s), 0); };
 
 /* Outcome counters: what a pilot would measure. Values are illustrative placeholders, Today vs Target. */
 IJP.COUNTERS_SRC = 'Counters a pilot would measure; values illustrative';
@@ -2287,6 +2306,13 @@ calc.counters = () => IJP.COUNTERS.map(c => Object.assign({}, c, {filled: c.at.s
    The recommendation offers international cover to Meera only, so she can never be on both. */
 IJP.retailMembers = (s) => { s = s || IJP.state; const sc = (s.rec && s.rec.scope) || {};
   return (s.quotes.retail.members||[]).filter(id => sc[id]!=='intl'); };
+/* The lives on the life insurer's application: Ananya for term life, and the Shield plan's members. Once the application was
+   submitted, the lives it was submitted with (frozen with the track); before that, the recommendation and the quote. */
+IJP.lifeLives = (s) => { s = s || IJP.state;
+  if(IJP.heldByCarrier(s, 'life')){ const its = IJP.issuedItems(s, 'life'), r = its.find(i => i.id==='retail');
+    return {life:its.some(i => i.id==='life'), retail:r ? (r.insured||[]).slice() : [], held:true}; }
+  const pk = s.rec.done ? s.rec.pick : {life:true, retail:true};
+  return {life:!!pk.life, retail:pk.retail ? IJP.retailMembers(s) : [], held:false}; };
 /* Each cart item keeps a copy of the quote it was priced from (q), so what is submitted and issued never moves with later quote edits. */
 IJP.cartItem = (kind) => {
   const s = IJP.state, q = s.quotes;
@@ -2306,7 +2332,7 @@ IJP.cartItem = (kind) => {
 const appVer = (s, k) => (s.apps[k] && s.apps[k].ver) || 0;
 IJP.signedFor = (s, k) => { s = s || IJP.state; return (s.cart||[]).filter(i => i.status==='in' && i.carrier===k).map(i => i.id+':'+calc.finalPremium(i, s)).sort().join(',')+'@v'+appVer(s, k); };
 IJP.debitFor = (s) => { s = s || IJP.state; const c = s.checkout;
-  return calc.cartCarriers().filter(k => c.consent[k]!=='declined').map(k => k+'['+IJP.signedFor(s, k)+']').join('|')+'='+calc.cartTotal(); };
+  return calc.cartCarriers().filter(k => c.consent[k]==='approved').map(k => k+'['+IJP.signedFor(s, k)+']').join('|')+'='+calc.authorisedTotal(s); };
 IJP.authCheck = (s) => { s = s || IJP.state; const c = s.checkout; if(!c || c.submitted) return;
   ['life','intl'].forEach(k => { if(c.signed[k] && c.signedFor && c.signedFor[k]!=null && c.signedFor[k]!==IJP.signedFor(s, k)){ c.signed[k] = false; delete c.signedFor[k];
     IJP.log('Bank orchestration', 'Signature no longer valid', ({life:'The life insurer',intl:'The international health insurer'})[k]+': the application changed after it was signed; Ananya signs again', 'application'); } });
@@ -2323,12 +2349,20 @@ IJP.cartAdd = (kind) => {
 IJP.inCart = (kind) => (IJP.state.cart||[]).some(x => x.id===kind && x.status==='in');
 IJP.action('cart.add', kind => IJP.cartAdd(kind));
 IJP.action('cart.remove', id => { const it = IJP.state.cart.find(x => x.id===id); if(it){ it.status='removed'; IJP.log(IJP.P.is.name,'Removed from cart', it.title); IJP.authCheck(); } });
-IJP.action('cart.restore', id => { const it = IJP.state.cart.find(x => x.id===id); if(it){ it.status='in'; IJP.authCheck(); } });
+/* An item comes back only with a completed application behind it: after a reopen, the application is completed again first. */
+IJP.action('cart.restore', id => { const s = IJP.state, it = s.cart.find(x => x.id===id); if(!it) return;
+  if(s.apps[it.carrier] && s.apps[it.carrier].status!=='complete'){ IJP.toast('Complete the application again first'); return; }
+  it.status='in'; IJP.authCheck(); });
+/* Nobody may be insured on two medical plans in one cart (international and Shield): checked before checkout (I12, C13). */
+IJP.medicalOverlap = (s) => { s = s || IJP.state; const seen = {}, dup = [];
+  (s.cart||[]).filter(i => i.status==='in' && (i.id==='intl' || i.id==='retail')).forEach(i => (i.insured||[]).forEach(p => { if(seen[p] && !dup.includes(p)) dup.push(p); seen[p] = true; }));
+  return dup; };
 IJP.action('cart.decline', arg => { const id = arg && arg.id || arg, it = IJP.state.cart.find(x => x.id===id);
   if(it){ it.status='declined'; it.reason = (arg && arg.reason) || 'Client declined'; IJP.log('Client','Declined', it.title+': '+it.reason, 'outcome fed back to '+IJP.B.engine); IJP.authCheck(); } });
 
 IJP.action('checkout.start', () => {
-  const s = IJP.state, c = s.checkout; c.started = true;
+  const s = IJP.state, c = s.checkout; if(IJP.medicalOverlap(s).length){ IJP.toast('Two medical plans cover the same person: remove one first'); return; }
+  c.started = true;
   calc.cartCarriers().forEach(k => { if(c.consent[k]==='none') c.consent[k] = 'requested'; });
   IJP.log(IJP.P.is.name, 'Consent requested', 'Per carrier, sent to Ananya\'s phone', 'application');
 });
@@ -2341,16 +2375,16 @@ IJP.action('consent.set', arg => {
 IJP.action('sign', carrier => { const c = IJP.state.checkout; c.signed[carrier] = true; c.signedFor = c.signedFor || {}; c.signedFor[carrier] = IJP.signedFor(IJP.state, carrier);
   IJP.log('Client','Signed application', ({life:'The life insurer',intl:'The international health insurer'})[carrier], 'application'); });
 IJP.action('debit.set', arg => { const s = IJP.state, d = s.checkout.debit; if(arg.account) d.account = arg.account; d.status = arg.status;
-  d.for = arg.status==='authorised' ? IJP.debitFor(s) : null; if(arg.status==='authorised'){ d.amount = calc.cartTotal(); d.lapsed = false; }
+  d.for = arg.status==='authorised' ? IJP.debitFor(s) : null; if(arg.status==='authorised'){ d.amount = calc.authorisedTotal(s); d.lapsed = false; }
   IJP.log('Client', arg.status==='authorised' ? 'Premium debit authorised' : 'Premium debit '+arg.status, ((IJP.P.accounts.find(a => a.id===d.account)||{}).label || '')+(arg.status==='authorised' ? ' · '+IJP.fmt.sgd(d.amount)+' a year' : ''), 'payment'); });
 IJP.submit = () => {
   const s = IJP.state, c = s.checkout; IJP.authCheck(s); c.submitted = true;
   calc.cartCarriers().forEach(k => {
     const ok = c.consent[k]==='approved' && c.signed[k] && c.debit.status==='authorised';
     /* The submitted product set is frozen with the track: the issued schedule and wording are built from it, not from later edits. */
-    const items = IJP.clone(s.cart.filter(i => i.status==='in' && i.carrier===k));
-    s.tracks[k] = ok ? {stage:'submitted', at:IJP.storyTime(), sentAt:IJP.storyTime(), items} : {stage:'stopped', reason: c.consent[k]!=='approved' ? 'Consent '+(c.consent[k]==='declined'?'declined':'not given')+' by the client' : !c.signed[k] ? 'Application not signed' : 'Premium debit not authorised'};
-    IJP.log('bank orchestration', ok ? 'Submitted' : 'Not submitted', ({life:'The life insurer',intl:'The international health insurer'})[k]+(ok?': application and data packet sent':': '+s.tracks[k].reason), 'application');
+    const items = IJP.clone(s.cart.filter(i => i.status==='in' && i.carrier===k)), debit = calc.cartTotal(k);
+    s.tracks[k] = ok ? {stage:'submitted', at:IJP.storyTime(), sentAt:IJP.storyTime(), items, debit} : {stage:'stopped', reason: c.consent[k]!=='approved' ? 'Consent '+(c.consent[k]==='declined'?'declined':'not given')+' by the client' : !c.signed[k] ? 'Application not signed' : 'Premium debit not authorised'};
+    IJP.log('bank orchestration', ok ? 'Submitted' : 'Not submitted', ({life:'The life insurer',intl:'The international health insurer'})[k]+(ok?': application and data packet sent · premium debit '+IJP.fmt.sgd(debit)+' a year':': '+s.tracks[k].reason), 'application');
   });
 };
 IJP.action('submit', () => IJP.submit());
@@ -2372,26 +2406,37 @@ IJP.action('app.start', k => { const a = IJP.state.apps[k]; if(a.status==='none'
 IJP.action('app.quoted', k => { const a = IJP.state.apps[k]; if(a.status==='none') a.status = 'quoted'; });
 IJP.action('app.complete', k => { const a = IJP.state.apps[k]; a.status = 'complete'; a.completedAt = IJP.storyTime(); a.ver = (a.ver||0)+1;
   IJP.log(IJP.P.is.name, 'Application completed', CN[k]+'\'s system holds a completed draft; nothing is submitted until the client authorises it at checkout', 'application'); });
-/* issue(): all submitted carriers, or one: issue('life') / issue('intl'), or outcomes {life:'rated', intl:'standard', only:'intl'} */
+/* issue(): all submitted carriers, or one: issue('life') / issue('intl'), or outcomes {life:'rated', intl:'standard', only:'intl'}.
+   An underwriting decline is its own terminal stage ('declined'): the insurer decided, and no policy exists, so there is no
+   policy number, no schedule and nothing in force. */
 IJP.issue = (outcomes) => {
   const s = IJP.state; if(typeof outcomes==='string') outcomes = {only:outcomes}; outcomes = outcomes || {};
   ['life','intl'].forEach(k => { const t = s.tracks[k]; if(outcomes.only && outcomes.only!==k) return;
-    if(t.stage==='submitted' || t.stage==='underwriting'){
-      s.tracks[k] = {stage:'issued', outcome: outcomes[k] || 'standard', policyNo: k==='life' ? 'LIFE-SG-7731-2209' : 'INTL-55-0918', at:'Wed 28 Oct', sentAt:t.sentAt||t.at, items:t.items};
-      IJP.log(k==='life'?'The life insurer':'The international health insurer', 'Policy issued', s.tracks[k].policyNo+' · '+s.tracks[k].outcome+' terms', 'fulfilment'); }
+    if(t.stage==='submitted' || t.stage==='underwriting'){ const o = outcomes[k] || 'standard', nm = k==='life'?'The life insurer':'The international health insurer';
+      if(o==='declined'){ s.tracks[k] = {stage:'declined', outcome:'declined', at:IJP.STORY.decided, sentAt:t.sentAt||t.at, items:t.items, debit:t.debit};
+        IJP.log(nm, 'Application declined at underwriting', 'No policy issued', 'fulfilment'); return; }
+      s.tracks[k] = {stage:'issued', outcome:o, policyNo: k==='life' ? 'LIFE-SG-7731-2209' : 'INTL-55-0918', at:IJP.STORY.decided, sentAt:t.sentAt||t.at, items:t.items, debit:t.debit};
+      IJP.log(nm, 'Policy issued', s.tracks[k].policyNo+' · '+s.tracks[k].outcome+' terms', 'fulfilment'); }
   });
 };
+/* A decline reads the same whether it was recorded as its own stage or, in an older case, as "issued" with a declined outcome. */
+IJP.declined = t => !!t && (t.stage==='declined' || (t.stage==='issued' && t.outcome==='declined'));
+IJP.inForce = t => !!t && t.stage==='issued' && t.outcome!=='declined';
 IJP.action('issue', arg => IJP.issue(arg));
 /* The premium after underwriting. A rated outcome adds a 25% loading to the life cover (illustrative); everything else keeps the
    cart premium. One place, so the issued schedule (X06), the cart, the session close, the policy data back and the holdings agree. */
 calc.finalPremium = (it, s) => { s = s || IJP.state; if(!it) return 0; const t = s.tracks[it.carrier];
   return it.id==='life' && t && t.stage==='issued' && t.outcome==='rated' ? Math.round(it.premium*1.25/10)*10 : it.premium; };
 /* What a carrier already holds: an application submitted at checkout stays with the insurer whatever happens to future sharing. */
-IJP.heldByCarrier = (s, k) => { s = s || IJP.state; const t = s.tracks[k]; return !!t && ['submitted','underwriting','issued'].includes(t.stage); };
+IJP.heldByCarrier = (s, k) => { s = s || IJP.state; const t = s.tracks[k]; return !!t && ['submitted','underwriting','issued','declined'].includes(t.stage); };
 /* The products submitted to (and issued by) one carrier: the set frozen at submission. A case saved before items were
    frozen falls back to the cart items that were in at the time. */
-IJP.issuedItems = (s, k) => { s = s || IJP.state; const t = s.tracks[k]; if(!t || !['submitted','underwriting','issued'].includes(t.stage)) return [];
+IJP.issuedItems = (s, k) => { s = s || IJP.state; const t = s.tracks[k]; if(!t || !['submitted','underwriting','issued','declined'].includes(t.stage)) return [];
   return Array.isArray(t.items) ? t.items : (s.cart||[]).filter(i => i.status==='in' && i.carrier===k); };
+/* The family view of cover (C05 "My protection, anywhere", W01): the cover register plus every policy issued in this case,
+   from the same holdings list as Insurance holdings (C17), so every count agrees. */
+IJP.familyCover = (s) => { s = s || IJP.state; const pol = s.cover.policies || [], issued = IJP.holdings ? IJP.holdings(s).filter(h => h.issued) : [];
+  return {count:pol.length + issued.length, abroad:pol.filter(x => x.country!=='SG' || x.employer).length, issued}; };
 /* One preference model for every insurance insight (s.gi.topics plus each card's own state; see IJP.insightHidden).
    "Turn off insurance insights" is the global switch, so it hides every insurance insight, not just this card;
    bringing the card back (Undo, "Turn back on") switches the topics it needs on again. */
@@ -2400,8 +2445,34 @@ IJP.action('insight.set', arg => { const s = IJP.state, v = arg && arg.status ||
   s.insight.status = v; s.insight.reason = (arg && arg.reason) || null;
   IJP.log('Client', v==='optout' ? 'Insurance insights switched off' : 'Insight '+v, IJP.P.insightId, 'fed back to '+IJP.B.engine); });
 IJP.action('reset', () => { IJP.reset(true); IJP.toast('Case reset'); });
+/* A second health purchase, started in W07 after an earlier one was submitted, is a fresh application cycle in the same case:
+   a new recommendation, an empty cart, checkout and signatures reset, and every consent asked again (the per-insurer consents
+   at checkout, and her W07 share answer unless she gave it for this request). What was submitted stays frozen with its track,
+   and so in the holdings. An insurer that already holds an application from this case takes no second one here
+   (IJP.healthCarrierHeld): W07 says so and points her to Priya. */
+const HCARRIER = kind => kind==='local' ? 'life' : 'intl';
+/* The application cycle a W07 share answer given now belongs to: after a submission, the next one. */
+IJP.shareCycleNow = s => { s = s || IJP.state; return (s.cycle||0) + (s.checkout.submitted ? 1 : 0); };
+IJP.healthCarrierHeld = (s, kind) => { s = s || IJP.state; return !!s.checkout.submitted && IJP.heldByCarrier(s, HCARRIER(kind)); };
+IJP.newCycle = (s, kind) => { s = s || IJP.state; const k = HCARRIER(kind), acct = s.checkout.debit.account;
+  s.cycle = (s.cycle||0) + 1;
+  s.rec = {done:false, scope:{ananya:null, vikram:null, kabir:null, meera:null}, pick:{intl:false, retail:false, life:false}};
+  s.cart = [];
+  Object.assign(s.apps[k], {status:'none', answers:{}, completedAt:null});
+  if(s.tracks[k].stage==='stopped') s.tracks[k] = {stage:'none'};
+  s.checkout = {started:false, consent:{life:'none', intl:'none'}, signed:{life:false, intl:false}, debit:{account:acct, status:'none'}, submitted:false};
+  s.close = {done:false, outcome:null, reason:null};
+  s.booking = {status:null, with:null, by:null, slot:null, channel:null, share:Object.assign({goals:true, cover:true, insight:true}, s.booking && s.booking.share)};
+  s.ipad.opened = false; s.ipad.turned = false; s.pathLogged = false;
+  if(s.hw && (s.hw.shareCycle||0)!==s.cycle) s.hw.shareChoices = null;   /* an answer given for the earlier request is not reused */
+  if(s.pad) Object.assign(s.pad, {outcome:null, item:null, reason:'', also:{}});
+  IJP.log('Bank orchestration', 'New application cycle', (kind==='local' ? 'Retail medical' : 'International medical')+' starts afresh: recommendation, cart and checkout. Applications already submitted stay as they are', 'application');
+};
 /* Client-started health purchase from the Health tab (W07): sets the path and the booking context, links back into the main journey. */
-IJP.action('path.health', kind => { const s = IJP.state; s.path = kind==='local' ? 'health-local' : 'health-intl';
+IJP.action('path.health', kind => { const s = IJP.state;
+  if(IJP.healthCarrierHeld(s, kind)) return;
+  if(s.checkout.submitted) IJP.newCycle(s, kind);
+  s.path = kind==='local' ? 'health-local' : 'health-intl';
   if(s.pa) s.pa.needs = [];
   s.pathNote = kind==='local' ? 'Started by Ananya in the Health tab: retail medical (Integrated Shield plan, illustrative) for the family' : 'Started by Ananya in the Health tab: international medical for Meera';
   IJP.pathDisclose(s); });
@@ -2435,10 +2506,12 @@ M('recommended', s => { const r = s.rec; if(!r.done){ r.scope = {ananya:'retail'
   if(s.path==='health-intl'){ r.scope.ananya = r.scope.vikram = r.scope.kabir = 'employer'; } if(s.path==='health-local'){ r.scope.meera = 'none'; }
   r.done = true; } });
 M('shared', s => { const a = s.apps.intl; if(a.share==='none') IJP.actions['app.share']({carrier:'intl', value:'granted'}); if(s.apps.life.share==='none') s.apps.life.share = 'granted'; });
-M('intl', s => { if(s.path==='health-local' || s.apps.intl.share==='declined') return; const a = s.apps.intl; if(a.share==='none') IJP.actions['app.share']({carrier:'intl', value:'granted'}); if(a.status!=='complete') IJP.actions['app.complete']('intl');
+/* A preset follows a confirmed recommendation: it adds only the products the recommendation includes. */
+const recWants = (s, id) => !s.rec.done || (id==='intl' ? s.rec.pick.intl && Object.values(s.rec.scope).includes('intl') : !!s.rec.pick[id]);
+M('intl', s => { if(s.path==='health-local' || s.apps.intl.share==='declined' || !recWants(s, 'intl')) return; const a = s.apps.intl; if(a.share==='none') IJP.actions['app.share']({carrier:'intl', value:'granted'}); if(a.status!=='complete') IJP.actions['app.complete']('intl');
   if(!s.cart.some(x => x.id==='intl')) IJP.cartAdd('intl'); });
-M('quoted', s => { if(s.path==='health-intl') return; const a = s.apps.life; if(a.share==='none') a.share = 'granted'; if(a.status!=='complete') IJP.actions['app.complete']('life');
-  if(s.path!=='health-local' && !s.cart.some(x => x.id==='life')) IJP.cartAdd('life'); if(!s.cart.some(x => x.id==='retail')) IJP.cartAdd('retail'); });
+M('quoted', s => { if(s.path==='health-intl' || !(recWants(s, 'life') || recWants(s, 'retail'))) return; const a = s.apps.life; if(a.share==='none') a.share = 'granted'; if(a.status!=='complete') IJP.actions['app.complete']('life');
+  if(s.path!=='health-local' && recWants(s, 'life') && !s.cart.some(x => x.id==='life')) IJP.cartAdd('life'); if(recWants(s, 'retail') && !s.cart.some(x => x.id==='retail')) IJP.cartAdd('retail'); });
 M('consented', s => { const c = s.checkout; if(!c.started) IJP.actions['checkout.start']();
   calc.cartCarriers().forEach(k => { if(c.consent[k]==='none' || c.consent[k]==='requested') IJP.actions['consent.set']({carrier:k, value:'approved'}); }); });
 M('submitted', s => { const c = s.checkout; calc.cartCarriers().forEach(k => { if(!c.signed[k] && c.consent[k]==='approved') IJP.actions.sign(k); });
@@ -2543,8 +2616,8 @@ ui.gapBar = (g) => {
   return '<div class="bar" role="img" aria-label="Held '+IJP.fmt.compact(g.held)+' of needed '+IJP.fmt.compact(g.need)+'"><span class="acc" style="width:'+(h/tot*100).toFixed(1)+'%"></span><span class="bad" style="width:'+(g.gap/tot*100).toFixed(1)+'%;opacity:.35"></span></div>';
 };
 /* Status of a carrier track for C15, R08, I15. */
-ui.trackLabel = (t) => ({none:'Not started', submitted:'Submitted', underwriting:'Underwriting', issued:'Issued', stopped:'Stopped'})[t.stage] || t.stage;
-ui.trackKind = (t) => ({issued:'ok', stopped:'bad', submitted:'', underwriting:'warn', none:'grey'})[t.stage] || '';
+ui.trackLabel = (t) => IJP.declined && IJP.declined(t) ? 'Declined' : ({none:'Not started', submitted:'Submitted', underwriting:'Underwriting', issued:'Issued', stopped:'Stopped'})[t.stage] || t.stage;
+ui.trackKind = (t) => IJP.declined && IJP.declined(t) ? 'bad' : ({issued:'ok', stopped:'bad', submitted:'', underwriting:'warn', none:'grey'})[t.stage] || '';
 })();
 
 </script>
@@ -2612,7 +2685,7 @@ const N={
  o_sso:{x:770,y:822,w:150,t:'Single sign-on',s:'identity provider · Today: a separate sign-in',k:'bank',dev:'System',today:'manual',tgt:'road',what:'Carries Global Bank identity and the pre-filled case into the life insurer\'s journey. Today (a typical starting point): a separate sign-in, with the details typed in again. Target: single sign-on, the case pre-filled for the specialist to confirm.',src:'Concept prototype: design assumption',guard:''},
  o_orch:{x:1100,y:822,t:'Bank orchestration layer',s:'round trips · routing · status',k:'bank',dev:'System',today:'gap',tgt:'road',what:'Global Bank-built layer that routes each cart item to its carrier with pre-fill and collects status. The orchestration partner is optional.',src:'Concept prototype: design assumption',guard:'Thin layer: carriers keep FNA, underwriting and issue.'},
  o_vendor:{x:925,w:150,y:822,t:'The orchestration partner (optional)',s:'optional integration route',k:'partner',dev:'System',today:'manual',tgt:'new',what:'One of two generic ways to carry an advised case from Insurance Desk into the FNA: directly by single sign-on, or through an integration partner. Optional either way; the same packet travels.',src:'Concept prototype: design assumption',guard:''},
- life_dash:{x:560,y:906,t:'Specialist Dashboard',s:'<span class="scr">R06</span> · optional · illustrative',k:'partner',dev:'iPad',today:'new',tgt:'live',what:'Optional and illustrative: an insurer-built dashboard of this kind, reached by single sign-on from RM Workstation (more information) and from Insurance Desk (frontline insurance specialists): client gaps, existing policies, pipeline, conversion, coaching. Shown in the life insurer\'s look.',src:'Concept prototype: design assumption',guard:'Not replicated in the bank; only a small context subset comes back (example fields).'},
+ life_dash:{x:560,y:906,t:'Specialist Dashboard',s:'<span class="scr">R06</span> · optional · illustrative',k:'partner',dev:'Desktop',today:'new',tgt:'live',what:'Optional and illustrative: an insurer-built dashboard of this kind, reached by single sign-on from RM Workstation (more information) and from Insurance Desk (frontline insurance specialists): client gaps, existing policies, pipeline, conversion, coaching. Shown in the life insurer\'s look.',src:'Concept prototype: design assumption',guard:'Not replicated in the bank; only a small context subset comes back (example fields).'},
  i_specialist:{x:560,y:624,w:190,t:'Insurance specialist (Global Bank)',s:'bank-employed · RM refers · sells both',k:'bank',dev:'iPad',today:'live',tgt:'live',what:'Employed by the bank. The RM refers the client to them. The same specialist runs the whole sitting on the iPad: goals review, needs analysis, the international health insurer\'s quotation, then the life insurer\'s journey.',src:'Concept prototype: design assumption',guard:'One specialist, separate systems: each carrier\'s system sees only its own data packet.'},
  life_sys:{x:1310,y:906,t:'The life insurer\'s systems',s:'application · underwriting',k:'partner',dev:'Insurer',today:'manual',tgt:'road',what:'Today (Singapore): the life insurer\'s own system, client data re-keyed by hand. Target (Singapore): a web journey by single sign-on, case pre-filled.',src:'Concept prototype: design assumption',guard:'Carrier-hosted regulated FNA.'},
  life_issue:{x:1517,y:906,w:175,t:'Underwrite and issue',s:'The life insurer',k:'partner',dev:'Insurer',today:'live',tgt:'live',what:'The life insurer underwrites, issues and administers the policy.',src:'Concept prototype: design assumption',guard:''},
@@ -4015,33 +4088,46 @@ const neutral = t => { const x = String(t).replace(OTHER_APP, 'other insurers\' 
   const y = x.replace(OTHER, '').replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1').trim(); return y===x ? x : y+' held by another insurer'; };
 /* What this request covers (s.rec.pick): hero = all three; health-intl = the international health insurer only; health-local = the Shield plan only. */
 const picks = s => s.rec.done ? s.rec.pick : {intl:true, retail:true, life:true};
-const cartIds = k => k==='intl' ? ['intl'] : ['life','retail'].filter(id => picks(IJP.state)[id]);
+/* The life insurer's side: once its application was submitted, the products it was submitted with; before that, the request. */
+const pickLife = s => { const L = IJP.lifeLives(s); return L.held ? {intl:picks(s).intl, life:L.life, retail:L.retail.length>0} : picks(s); };
+IJP.lifePicks = pickLife;
+const andL = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+const ORDER = ['ananya','vikram','kabir','meera'];
+/* The people on the life insurer's application, in family order: Ananya for term life, and the Shield plan's members. */
+const livesOn = s => { const L = IJP.lifeLives(s); return ORDER.filter(id => (L.life && id===IJP.P.client.id) || L.retail.includes(id)); };
+/* Where an application stands, in words, from the carrier's track (submitted, issued, declined, stopped) and its status. */
+const appStage = (s, k) => { const t = s.tracks[k], a = s.apps[k];
+  if(IJP.declined(t)) return 'declined at underwriting';
+  if(t.stage==='issued') return 'policy issued';
+  if(t.stage==='submitted' || t.stage==='underwriting') return 'submitted at checkout';
+  if(t.stage==='stopped') return 'completed draft, not submitted';
+  return a.status==='complete' ? 'completed draft' : 'in progress'; };
+const cartIds = k => k==='intl' ? ['intl'] : ['life','retail'].filter(id => pickLife(IJP.state)[id]);
 const inCartK = k => cartIds(k).some(id => IJP.inCart(id));
 
 /* Health declarations (synthetic). Asked inside the carrier's application only; never in the bank case. */
-const Q_LIFE = [
-  {id:'q1', t:'In the last 5 years, has Ananya stayed in hospital or had surgery?', who:'Ananya answers'},
-  {id:'q1v', t:'In the last 5 years, has Vikram stayed in hospital or had surgery?', who:'Vikram answers his own'},
-  {id:'q1k', t:'In the last 5 years, has Kabir stayed in hospital or had surgery?', who:'Ananya answers, as Kabir\'s parent'},
-  {id:'q2', t:'Is anyone to be insured on regular medication or under a doctor\'s care now?', who:'Each person answers for themselves'},
-  {id:'q3', t:'Has Ananya been told she has high blood pressure, diabetes, or a heart or lung condition?', who:'Ananya (life and critical illness)'},
-  {id:'q4', t:'Has Ananya smoked or vaped in the last 12 months?', who:'Ananya'},
-  {id:'q5', t:'Are any tests, investigations or treatment planned or pending?', who:'Each person answers for themselves'}
-];
+/* The life application asks a hospital question of each person it insures (livesOn), then Ananya's term life questions. */
+const Q1 = {ananya:'q1', vikram:'q1v', kabir:'q1k', meera:'q1m'};
+const Q1WHO = {ananya:'Ananya answers', vikram:'Vikram answers his own', kabir:'Ananya answers, as Kabir\'s parent', meera:'Meera answers her own'};
+const lifeQs = s => livesOn(s).map(id => ({id:Q1[id], t:'In the last 5 years, has '+IJP.person(id).name+' stayed in hospital or had surgery?', who:Q1WHO[id]}))
+  .concat([{id:'q2', t:'Is anyone to be insured on regular medication or under a doctor\'s care now?', who:'Each person answers for themselves'}],
+    pickLife(s).life ? [{id:'q3', t:'Has Ananya been told she has high blood pressure, diabetes, or a heart or lung condition?', who:'Ananya (life and critical illness)'},
+      {id:'q4', t:'Has Ananya smoked or vaped in the last 12 months?', who:'Ananya'}] : [],
+    [{id:'q5', t:'Are any tests, investigations or treatment planned or pending?', who:'Each person answers for themselves'}]);
+/* Shared with the guide, so its hints ask exactly the questions on screen. */
+IJP.lifeQs = s => lifeQs(s || IJP.state).map(q => q.id);
 const Q_INTL = [
   {id:'q1', t:'In the last 5 years, has Meera stayed in hospital or had surgery?', who:'Meera answers her own'},
   {id:'q2', t:'Is Meera on any regular medication?', who:'Meera answers her own'},
   {id:'q3', t:'Has Meera been treated for an ongoing condition in the last 2 years?', who:'Meera answers her own'},
   {id:'q4', t:'Are any tests or treatment planned for Meera?', who:'Meera answers her own'}
 ];
-const LIFE_Q = ['q3','q4'], SHIELD_Q = ['q1v','q1k'];
-const Qs = (k, s) => { if(k==='intl') return Q_INTL; const p = picks(s || IJP.state);
-  return Q_LIFE.filter(q => (p.life || !LIFE_Q.includes(q.id)) && (p.retail || !SHIELD_Q.includes(q.id))); };
+const Qs = (k, s) => k==='intl' ? Q_INTL : lifeQs(s || IJP.state);
 /* What a completed application holds (the milestone path completes without visiting the form). */
 const MEERA_COURSE = 'Economics (BSc), a London university, Sep 2026 to Jun 2029', MEERA_ADDR = 'Student halls, London WC1 (given by Meera)';
 const DEF_ANS = {
   intl:{confirm:true, res:'uk', away:'lt3', course:MEERA_COURSE, addr:MEERA_ADDR, holder:'ananya', claims:'meera', q1:'no', q2:'no', q3:'no', q4:'no'},
-  life:{confirm:true, funds:'salary', replace:'no', nominee:'vikram', q1:'no', q1v:'yes', q1k:'no', q2:'no', q3:'no', q4:'no', q5:'no'}  /* Vikram: knee surgery last year (co-pilot t15); details held by the life insurer only */
+  life:{confirm:true, funds:'salary', replace:'no', nominee:'vikram', q1:'no', q1v:'yes', q1k:'no', q1m:'no', q2:'no', q3:'no', q4:'no', q5:'no'}  /* Vikram: knee surgery last year (co-pilot t15); details held by the life insurer only */
 };
 const answersOf = (s, k) => { const a = s.apps[k]; return Object.assign({}, a.status==='complete' ? DEF_ANS[k] : {}, a.answers || {}); };
 /* The parts of each application, in order. done(a) = the part's required answers are in. */
@@ -4057,7 +4143,7 @@ const PARTS = {
     {id:'details', label:'Proposer and insured', short:'Insured', done:a => a.confirm===true},
     {id:'income', label:'Occupation and income', short:'Income', done:a => !!a.funds},
     {id:'cover', label:'Existing cover', short:'Existing cover', done:a => !!a.replace},
-    {id:'nominee', label:'Beneficiaries', short:'Beneficiaries', done:a => !!a.nominee, need:s => picks(s).life},
+    {id:'nominee', label:'Beneficiaries', short:'Beneficiaries', done:a => !!a.nominee, need:s => pickLife(s).life},
     {id:'health', label:'Health declarations', short:'Health', done:(a, s) => Qs('life', s).every(q => a[q.id])},
     {id:'review', label:'Review', done:null}
   ]
@@ -4135,12 +4221,17 @@ IJP.action('cx.finish', k => {
 });
 /* Changing the plan after completion reopens the application and takes the product out of the cart until it is completed again. */
 const submittedK = (s, k) => s.tracks[k].stage!=='none';
-IJP.action('cx.reopen', k => {
-  const s = IJP.state, a = s.apps[k]; if(a.status!=='complete' || submittedK(s, k)) return;
-  a.answers = answersOf(s, k); a.status = 'in-progress'; a.completedAt = null;
+/* Reopening keeps the answers given so far, takes the carrier's products out of the cart and lapses its signature; also used
+   when the recommendation changes who is on the Shield plan (ipad.js). */
+IJP.reopenApp = (s, k, why) => { s = s || IJP.state; const a = s.apps[k]; if(submittedK(s, k)) return;
+  if(a.status==='complete'){ a.answers = answersOf(s, k); a.status = 'in-progress'; a.completedAt = null; }
   ['intl','life','retail'].filter(id => (k==='intl') === (id==='intl')).forEach(id => { if(IJP.inCart(id)) IJP.actions['cart.remove'](id); });
   if(s.checkout.signed[k]) s.checkout.signed[k] = false;
-  IJP.log(IJP.P.is.name, 'Application reopened', cap(CN[k])+': plan change requested; the product is out of the bank cart until the application is completed again', 'application');
+  IJP.log(IJP.P.is.name, 'Application reopened', cap(CN[k])+': '+why, 'application');
+};
+IJP.action('cx.reopen', k => {
+  const s = IJP.state, a = s.apps[k]; if(a.status!=='complete' || submittedK(s, k)) return;
+  IJP.reopenApp(s, k, 'plan change requested; the product is out of the bank cart until the application is completed again');
 });
 IJP.action('cx.outcome', arg => {
   const t = IJP.state.tracks[arg.carrier];
@@ -4150,11 +4241,12 @@ IJP.action('cx.outcome', arg => {
 /* ---------- shared chrome ---------- */
 const PK_SHORT = {
   intl:'Meera\'s name, date of birth, nationality and country of residence; Ananya as payer; the plan chosen; the case ID',
-  life:'Ananya\'s details, occupation and income band, the needs analysis, existing cover, Vikram and Kabir (name, date of birth), the case ID'
+  get life(){ const o = IJP.lifeLives().retail.filter(id => id!==IJP.P.client.id).map(id => IJP.person(id).name);
+    return 'Ananya\'s details, occupation and income band, the needs analysis, existing cover, '+(o.length ? andL(o)+' (name, date of birth), ' : '')+'the case ID'; }
 };
 function strip(ctx, k){
   const share = shareOf(ctx.s, k), other = k==='life' ? 'intl' : 'life';
-  const none = ctx.s.rec.done && (k==='life' ? !picks(ctx.s).life && !picks(ctx.s).retail : !picks(ctx.s).intl);
+  const none = ctx.s.rec.done && (k==='life' ? !pickLife(ctx.s).life && !pickLife(ctx.s).retail : !picks(ctx.s).intl);
   const holds = none ? '<b>nothing for this request.</b> '+cap(CN[k])+' isn\'t part of it.'
     : withdrawnHeld(ctx.s, k) ? '<b>the application submitted at checkout only.</b> Ananya has withdrawn consent for future sharing, so nothing further arrives.'
     : share==='granted' ? '<b>'+CN[k]+'\'s data packet only:</b> '+PK_SHORT[k]+'.'
@@ -4249,7 +4341,7 @@ function partBar(ctx, k, cur){
 const heldNote = (s, k, q) => k==='life' ? ((s.apps.life.held||[]).find(h => h.q===q.id && h.text) || null) : null;
 function qRows(ctx, k, locked){
   const ans = answersOf(ctx.s, k), Q = Qs(k, ctx.s), anyYes = Q.some(q => ans[q.id]==='yes');
-  return '<div class="cx-hb">'+I('lock','s16')+'<span>Asked here, '+(k==='intl'?'with Priya and Meera, who answers her own':'with Priya and each person being insured (Vikram answers his own)')+'. Every answer starts blank. The answers stay with '+CN[k]+' only. <b>Global Bank never sees them:</b> not in the bank case, the cart or RM Workstation.</span></div>'+
+  return '<div class="cx-hb">'+I('lock','s16')+'<span>Asked here, '+(k==='intl'?'with Priya and Meera, who answers her own':'with Priya and each person being insured, who answers their own')+'. Every answer starts blank. The answers stay with '+CN[k]+' only. <b>Global Bank never sees them:</b> not in the bank case, the cart or RM Workstation.</span></div>'+
     Q.map(q => { const hn = heldNote(ctx.s, k, q); return '<div class="cx-q"><div class="cx-qt">'+esc(q.t)+'<div class="tiny muted">'+esc(q.who)+(ans[q.id]==='yes' ? ' · <b class="warn-t">Yes: details go in the insurer\'s follow-up questions and stay with it</b>' : '')+'</div>'+
       (hn ? '<div class="cx-held">'+I('lock','s16')+'<span><b>From the meeting notes, for this question only:</b> "'+esc(hn.text)+'" ('+esc(IJP.person(hn.who).name)+(hn.said ? ', '+esc(hn.said) : '')+'). '+esc(IJP.person(hn.who).name)+' confirms his own answer; the note stays with '+CN[k]+'.</span></div>' : '')+'</div>'+
       (locked ? pill(ans[q.id]==='yes'?'Yes':'No', ans[q.id]==='yes'?'warn':'grey') : seg('apps.'+k+'.answers.'+q.id, ans[q.id]||'', [['no','No'],['yes','Yes']], 'cx-yn'))+'</div>'; }).join('')+
@@ -4283,15 +4375,16 @@ function intlPart(ctx, part, locked){
 }
 /* ---- Life insurer parts ---- */
 function lifePart(ctx, part, locked){
-  const s = ctx.s, a = answersOf(s, 'life'), l = s.quotes.life, r = s.quotes.retail, rr = IJP.calc.retail(retailQ(s)), P = 'apps.life.answers.', t = tagOf(ctx, 'life'), pk = picks(s);
+  const s = ctx.s, a = answersOf(s, 'life'), l = s.quotes.life, r = s.quotes.retail, rr = IJP.calc.retail(retailQ(s)), P = 'apps.life.answers.', t = tagOf(ctx, 'life'), pk = pickLife(s);
   if(part==='details'){
-    const auth = s.checks.clientAuth==='granted';
+    const auth = s.checks.clientAuth==='granted', shieldLives = pk.retail ? ORDER.filter(id => IJP.lifeLives(s).retail.includes(id)) : [];
     return (ctx.today
       ? '<div class="cx-count today">'+I('edit','s24')+'<div><b>46 fields re-keyed by hand</b> <span class="illus">Illustrative count</span><div class="tiny">Copied from Global Bank\'s systems into the life insurer\'s own system. About 1 in 5 applications come back not in good order (illustrative).</div></div></div>'
       : '<div class="cx-count">'+I('link','s24')+'<div><b>0 fields re-keyed</b> <span class="illus">Illustrative count</span><div class="tiny">Pre-filled from the bank case through single sign-on. Priya checks them with Ananya.</div></div></div>')+
       '<div class="hstack between" style="margin-top:10px"><b class="ink small">Proposer'+(pk.life?' and life assured':'')+'</b>'+t+'</div>'+
-      tiles(ctx, [['Name','Ananya Rao'],['Date of birth','12 May 1980 (46)'],['NRIC','S••••471J'],['Nationality','Indian, Singapore PR'],['Email',esc(IJP.P.client.email),true],['Mobile','+65 •••• 4471']], 4)+
-      (pk.retail ? '<b class="ink small" style="display:block;margin-top:10px">Lives assured for the Shield plan</b>'+tiles(ctx, [['Ananya Rao','46, proposer'],['Vikram Rao','2 Aug 1978 (48)'],['Kabir Rao','19 Jan 2014 (12)'],['Bank case',IJP.P.caseId]], 4) : '')+
+      tiles(ctx, [['Name',IJP.P.client.name],['Date of birth',IJP.P.client.dob+' ('+IJP.P.client.age+')'],['NRIC',IJP.P.client.nric],['Nationality','Indian, Singapore PR'],['Email',esc(IJP.P.client.email),true],['Mobile','+65 •••• 4471']], 4)+
+      (shieldLives.length ? '<b class="ink small" style="display:block;margin-top:10px">Lives assured for the Shield plan</b>'+tiles(ctx, shieldLives.map(id => { const m = IJP.person(id);
+        return [esc(m.name)+' Rao', id===IJP.P.client.id ? m.age+', proposer' : esc(m.dob||'')+' ('+m.age+')']; }).concat([['Bank case',IJP.P.caseId]]), 4) : '')+
       '<div class="cx-auth">'+I('shieldok','s16')+'<span><b>Consent to share with the life insurer:</b> the client authorisation in '+IJP.B.insdesk+' · '+(auth?'given':'pending')+(ctx.today?' (today this can take hours)':'')+'</span>'+pill(auth?'Given':'Pending', auth?'ok':'warn')+'</div>'+
       (auth ? confirmRow('life', a, locked, 'Ananya') : '<div class="small warn-t">Nothing can be filled in until the client authorisation is given.</div>');
   }
@@ -4316,12 +4409,22 @@ function lifePart(ctx, part, locked){
     (pk.retail ? '<tr><td>Shield plan (illustrative)</td><td>'+rr.rows.map(x => esc(x.name)).join(', ')+'</td><td>'+WARD[r.tier]+'</td><td class="r num">'+sgd(rr.total)+'</td></tr>' : '')+'</tbody></table>'+
     (!pk.life ? '<div class="tiny muted" style="margin-top:6px">Life cover isn\'t part of this request: this application covers the Shield plan only.</div>' : !pk.retail ? '<div class="tiny muted" style="margin-top:6px">Retail medical isn\'t part of this request: this application covers term life only.</div>' : ''));
 }
+/* What happened to a completed application, by the carrier's track: still a draft, submitted, issued, declined or stopped. */
+function doneText(s, k){
+  const t = s.tracks[k], sent = esc(t.sentAt || t.at || IJP.STORY.sitting);
+  if(IJP.declined(t)) return 'Submitted at checkout on '+sent+'. '+cap(CN[k])+' declined it at underwriting, so no policy was issued.';
+  if(t.stage==='issued') return 'Submitted at checkout on '+sent+' and issued on '+esc(t.at||'')+': '+(k==='intl' ? 'membership ' : 'policy ')+esc(t.policyNo||'')+'.';
+  if(t.stage==='submitted' || t.stage==='underwriting') return 'Submitted at checkout on '+sent+'. '+cap(CN[k])+' is underwriting it.';
+  if(t.stage==='stopped') return 'Not submitted: '+esc(lc(t.reason||'stopped at checkout'))+'. It stays with '+CN[k]+' as a draft that was never sent.';
+  return cap(CN[k])+'\'s system holds it as a completed draft. Nothing is submitted until Ananya authorises it at checkout.';
+}
+const lc = x => String(x).charAt(0).toLowerCase()+String(x).slice(1);
 function reviewPart(ctx, k, locked, plan){
   const s = ctx.s, a = answersOf(s, k), miss = missingParts(s, k), complete = s.apps[k].status==='complete';
   const list = '<div class="cx-revlist">'+partsFor(s, k).filter(p => p.done).map(p => { const ok = p.done(a, s);
     return '<button class="cx-rev'+(ok?' ok':'')+'" data-tab="part:'+p.id+'">'+I(ok?'okc':'alert','s16')+'<span>'+p.label+'</span><span class="grow"></span><span class="tiny">'+(ok?'Done':'To do')+'</span></button>'; }).join('')+'</div>';
   const cta = complete
-    ? '<div class="cx-done">'+I('okc','s24')+'<div><b>Application complete'+(s.apps[k].completedAt?' · '+esc(s.apps[k].completedAt):'')+'.</b> '+cap(CN[k])+'\'s system holds it as a completed draft. Nothing is submitted until Ananya authorises it at checkout.</div></div>'
+    ? '<div class="cx-done">'+I('okc','s24')+'<div><b>Application complete'+(s.apps[k].completedAt?' · '+esc(s.apps[k].completedAt):'')+'.</b> '+doneText(s, k)+'</div></div>'
     : '<div class="cx-cta">'+B(k==='intl' || cartIds(k).length<2 ? 'Application complete: add to bank cart' : 'Application complete: add both to bank cart', {act:'cx.finish', arg:k, go:'I07'}, 'lg', 'cart', miss.length>0)+
       (miss.length ? '<span class="small warn-t">Still to do: '+miss.map(p => p.label.toLowerCase()).join(', ')+'.</span>' : '<span class="small muted">Saves the completed application in '+sysName(ctx, k)+' and puts the '+(k==='intl'?'plan':'plans')+' in the bank cart. <b>Nothing is submitted until Ananya authorises it at checkout.</b></span>')+'</div>';
   return list+'<div style="margin-top:10px">'+plan+'</div>'+cta;
@@ -4338,16 +4441,16 @@ function appForm(ctx, k){
 /* Application round trip: quote + completed application in the carrier's system → bank cart → submitted at checkout. */
 function trip(ctx, k){
   const s = ctx.s, a = s.apps[k], c = s.checkout, t = s.tracks[k], inCart = inCartK(k), con = c.consent[k];
-  const sub = ['submitted','underwriting','issued'].includes(t.stage), nParts = partsFor(s, k).length-1, done = nParts - missingParts(s, k).length;
+  const sub = ['submitted','underwriting','issued','declined'].includes(t.stage), dec = IJP.declined(t), nParts = partsFor(s, k).length-1, done = nParts - missingParts(s, k).length;
   const L = [
     ['Quote', a.status!=='none' ? 'done' : 'cur', k==='intl' ? 'In the insurer\'s quotation system' : 'In '+(ctx.today?'the life insurer\'s own system':'the insurer journey')],
-    [a.status==='complete' ? 'Application completed' : 'Application', a.status==='complete' ? 'done' : 'cur', a.status==='complete' ? 'Held as a completed draft'+(a.completedAt?' · '+a.completedAt:'') : done+' of '+nParts+' parts done, with Priya'],
+    [a.status==='complete' ? 'Application completed' : 'Application', a.status==='complete' ? 'done' : 'cur', a.status==='complete' ? (sub ? 'Completed'+(a.completedAt?' · '+a.completedAt:'')+', then submitted at checkout' : 'Held as a completed draft'+(a.completedAt?' · '+a.completedAt:'')) : done+' of '+nParts+' parts done, with Priya'],
     ['In the bank cart', inCart ? 'done' : a.status==='complete' ? 'cur' : '', inCart ? 'Plan, premium and application status only' : 'Once the application is complete'],
     ['Authorised at checkout', con==='approved' ? 'done' : con==='declined' ? 'stop' : con==='requested' ? 'cur' : '', con==='approved' ? 'Ananya authorised submission to '+CN[k] : con==='declined' ? 'Ananya declined consent for '+CN[k] : con==='requested' ? 'Waiting on Ananya\'s phone' : 'Per carrier, on Ananya\'s phone'],
     ['Signed on Ananya\'s phone', c.signed[k] ? 'done' : (con==='approved' ? 'cur' : ''), c.signed[k] ? 'Signed' : con==='approved' ? 'Waiting for Ananya\'s phone' : 'After authorisation'],
     ['Premium debit', c.debit.status==='authorised' ? 'done' : c.debit.status==='failed' ? 'stop' : '', c.debit.status==='authorised' ? 'Authorised · Global Bank account ••'+c.debit.account : c.debit.status==='failed' ? 'Failed: pending a new Global Bank account' : 'One Global Bank account, one debit per carrier'],
-    ['Submitted by bank orchestration', sub ? 'done' : t.stage==='stopped' ? 'stop' : '', sub ? 'Completed application released to '+CN[k]+(t.at?' · '+t.at:'') : t.stage==='stopped' ? 'Stopped: '+(t.reason||'') : 'Only after all of the above'],
-    [cap(CN[k])+' underwrites and issues', t.stage==='issued' ? 'done' : sub ? 'cur' : '', t.stage==='issued' ? (t.policyNo||'')+' · '+(t.outcome||'standard')+' terms' : sub ? 'Underwriting' : cap(CN[k])+' decides; the bank never binds']
+    ['Submitted by bank orchestration', sub ? 'done' : t.stage==='stopped' ? 'stop' : '', sub ? 'Completed application released to '+CN[k]+((t.sentAt||t.at)?' · '+(t.sentAt||t.at):'') : t.stage==='stopped' ? 'Stopped: '+(t.reason||'') : 'Only after all of the above'],
+    [cap(CN[k])+' underwrites and issues', dec ? 'stop' : t.stage==='issued' ? 'done' : sub ? 'cur' : '', dec ? 'Declined at underwriting: no policy issued' : t.stage==='issued' ? (t.policyNo||'')+' · '+(t.outcome||'standard')+' terms' : sub ? 'Underwriting' : cap(CN[k])+' decides; the bank never binds']
   ];
   return '<div class="timeline cx-tl">'+L.map(r => '<div class="tl-item '+r[1]+'"><div class="cx-tlt">'+r[0]+'</div><div class="tiny muted">'+esc(r[2])+'</div></div>').join('')+'</div>';
 }
@@ -4357,9 +4460,10 @@ function nextStep(ctx, k){
   if(!canView(s, k)) return '<div class="small muted">Nothing can be completed until Ananya agrees to share with '+CN[k]+'.</div>';
   if(a.status!=='complete'){ const m = missingParts(s, k);
     return '<div class="small">'+(m.length ? 'Still to do: '+m.map(p => p.label.toLowerCase()).join(', ')+'.' : 'All parts done. Complete it from the review.')+'</div><div class="tiny muted">Nothing is submitted until Ananya authorises it at checkout.</div>'; }
+  if(IJP.declined(t)) return ui.banner('<b>Declined at underwriting.</b> '+cap(CN[k])+' decided not to offer cover, so no policy was issued.', 'bad', 'alert')+B('See the outcome', {go:docId}, 'secondary block');
   if(t.stage==='issued') return B(k==='intl' ? 'See Meera\'s certificate' : 'See the policy schedule', {go:docId}, 'block', 'doc');
   if(t.stage==='stopped') return ui.banner('<b>Stopped: '+esc((t.reason||'not submitted').replace(/^Consent declined by the client$/, 'consent declined'))+'.</b> '+(k==='intl' ? 'The international health insurer has received nothing to underwrite.' : 'The life insurer has received no application.'), 'bad', 'alert')+B('See the outcome', {go:docId}, 'secondary block');
-  if(t.stage==='submitted' || t.stage==='underwriting') return B('Underwriting decision ▸ (two days later)', {act:'issue', arg:{only:k, [k]:outcomes(s)[k]}, go:docId}, 'block', 'clock');
+  if(t.stage==='submitted' || t.stage==='underwriting') return B('Underwriting decision ▸ ('+IJP.STORY.decided+')', {act:'issue', arg:{only:k, [k]:outcomes(s)[k]}, go:docId}, 'block', 'clock');
   if(c.started && inCart){
     if(c.consent[k]==='declined') return '<div class="small bad-t"><b>Not submitted.</b> Ananya declined consent for '+CN[k]+' at checkout.</div>'+B('Back to Global Bank checkout', {go:'I12'}, 'secondary block');
     const ready = c.consent[k]==='approved' && c.signed[k] && c.debit.status==='authorised';
@@ -4371,7 +4475,9 @@ function nextStep(ctx, k){
 }
 function statusCard(ctx, k){
   const a = ctx.s.apps[k];
-  return sec('This application', pill(({none:'Not started', quoted:'Quoted', 'in-progress':'In progress', complete:'Completed'})[a.status]||a.status, a.status==='complete'?'ok':'warn'),
+  const t = ctx.s.tracks[k], st = IJP.declined(t) ? ['Declined','bad'] : t.stage==='issued' ? ['Issued','ok'] : (t.stage==='submitted' || t.stage==='underwriting') ? ['Submitted','ok'] : t.stage==='stopped' ? ['Not submitted','bad']
+    : [({none:'Not started', quoted:'Quoted', 'in-progress':'In progress', complete:'Completed'})[a.status]||a.status, a.status==='complete'?'ok':'warn'];
+  return sec('This application', pill(st[0], st[1]),
     trip(ctx, k)+'<div class="stack s8">'+nextStep(ctx, k)+'</div>')+presenterPhone(ctx, k);
 }
 function presenterPhone(ctx, k){
@@ -4518,7 +4624,7 @@ IJP.screen({
       '<div class="cx-grid"><div class="stack s12">'+left+'</div><div class="stack s12">'+statusCard(ctx, 'intl')+'</div></div>';
     const foot = '<button class="btn ghost sm" data-go="G09">'+I('flow','s16')+'Bank orchestration: how this is routed</button><span class="grow"></span>'+
       B('View bank cart', {go:'I07'}, 'ghost sm', 'cart')+B('Back to session close', {go:'I15'}, 'secondary sm');
-    return intlPage(ctx, {cur:'X05', back:'I07', title:'Application: international health', sub:!canView(s, 'intl') ? 'Applicant: shared once Ananya consents' : 'Meera Rao · '+(a.status==='complete'?'completed draft':'in progress')+' · case '+IJP.P.caseId, main, foot});
+    return intlPage(ctx, {cur:'X05', back:'I07', title:'Application: international health', sub:!canView(s, 'intl') ? 'Applicant: shared once Ananya consents' : 'Meera Rao · '+appStage(s, 'intl')+' · case '+IJP.P.caseId, main, foot});
   }
 });
 
@@ -4542,19 +4648,23 @@ IJP.screen({
       main = today+'<div class="cx-narrow">'+sec('No certificate for Meera', pill('Not submitted','bad'), '<div class="stack s8"><p class="small"><b>'+esc(t.reason||'Not submitted')+'.</b> The insurer has received no application, so there is nothing to underwrite and no certificate.</p>'+
         '<p class="small muted">Meera\'s need stays open in the bank case. The other carrier\'s application went ahead on its own: each carrier is submitted separately.</p>'+
         '<div class="hstack wrap">'+B('Back to the application', {go:'X05'}, 'secondary sm')+B('Status back to Global Bank', {go:'G05'}, 'ghost sm', 'flow')+'</div></div>', 'cx-bite')+'</div>';
+    } else if(IJP.declined(t)){
+      main = today+'<div class="cx-narrow">'+sec('No certificate for Meera', pill('Declined','bad'), '<div class="stack s8"><p class="small"><b>The international health insurer declined Meera\'s application at underwriting.</b> No membership was issued, so there is no membership number and no certificate.</p>'+
+        '<p class="small muted">The medical reason stays in the insurer\'s underwriting file. Global Bank learns the outcome type only, and Meera\'s need stays open in the bank case.</p>'+
+        '<div class="hstack wrap">'+B('Back to the application', {go:'X05'}, 'secondary sm')+B('Status back to Global Bank', {go:'G05'}, 'ghost sm', 'flow')+'</div></div>', 'cx-bite')+'</div>';
     } else if(t.stage!=='issued'){
       main = today+'<div class="cx-narrow">'+sec('No certificate yet', pill(ui.trackLabel(t),'grey'), '<p class="small">'+(t.stage==='none' ? 'The application has not been submitted. It goes to the insurer only after Ananya authorises it at Global Bank checkout.' : 'The international health insurer is underwriting Meera\'s application.')+'</p>'+
         '<div class="hstack wrap" style="margin-top:8px">'+B('Back to the application', {go:'X05'}, 'secondary sm')+B('Status back to Global Bank', {go:'G05'}, 'ghost sm', 'flow')+'</div>')+'</div>';
     } else {
-      const ex = t.outcome==='exclusion', dec = t.outcome==='declined';
+      const ex = t.outcome==='exclusion';
       const cert = '<div class="cx-cert"><div class="cx-cert-h"><div><div class="tiny" style="opacity:.8">International health insurer · membership certificate</div><div class="cx-cert-t">Meera Rao</div></div><div class="right"><div class="tiny" style="opacity:.8">Membership number</div><b>'+esc(t.policyNo||'')+'</b></div></div>'+
         '<div class="cx-cert-b"><div class="cx-tiles cx-certf">'+[['Plan','International health plan'],['Tier',esc(tierName(q.tier))+' (illustrative)'],['Area of cover',AREA[q.area]],
-          ['Deductible',dedLabel(q.deductible)],['Start date','1 Nov 2026'],['Issued',esc(t.at||'Wed 28 Oct')+' 2026'],
-          ['Policyholder and payer','Ananya Rao'],['Premium',sgd(item ? IJP.calc.finalPremium(item, s) : IJP.calc.intl(q))+' a year (illustrative)'],['Terms',dec?'Not accepted':ex?'Accepted, with one exclusion':'Accepted at standard terms']]
+          ['Deductible',dedLabel(q.deductible)],['Start date','1 Nov 2026'],['Issued',esc(t.at||IJP.STORY.decided)+' 2026'],
+          ['Policyholder and payer','Ananya Rao'],['Premium',sgd(item ? IJP.calc.finalPremium(item, s) : IJP.calc.intl(q))+' a year (illustrative)'],['Terms',ex?'Accepted, with one exclusion':'Accepted at standard terms']]
           .map(f => '<div class="cx-tile"><span class="cx-tile-l">'+f[0]+'</span><span class="cx-tile-v">'+f[1]+'</span></div>').join('')+'</div>'+
         '<div class="cx-certnote">'+I('globe','s16')+'<span>Covers Meera in the UK, in Singapore when she is home, and '+(q.area==='ww'?'everywhere else, including the USA':'everywhere else except the USA')+'. Emergency evacuation included.</span></div>'+ui.distributedBy('intl')+'</div></div>';
-      const out = sec('Underwriting outcome', pill(dec?'Declined':ex?'Exclusion':'Standard', dec?'bad':ex?'warn':'ok'),
-        '<p class="small">'+(dec ? 'The international health insurer could not offer cover.' : ex ? 'Cover starts with one exclusion, for a condition Meera declared in the application. The wording is in her policy documents.' : 'Cover starts on standard terms, with no exclusions.')+'</p>'+
+      const out = sec('Underwriting outcome', pill(ex?'Exclusion':'Standard', ex?'warn':'ok'),
+        '<p class="small">'+(ex ? 'Cover starts with one exclusion, for a condition Meera declared in the application. The wording is in her policy documents.' : 'Cover starts on standard terms, with no exclusions.')+'</p>'+
         '<p class="tiny muted" style="margin-top:6px">The medical reason stays in the insurer\'s underwriting file. Global Bank learns the outcome type only.</p>'+
         '<div class="cx-presenter" style="margin-top:10px"><span>'+I('play','s16')+' Presenter: outcome</span>'+
           [['standard','Standard'],['exclusion','Exclusion']].map(v => '<button class="btn sm '+(t.outcome===v[0]?'':'secondary')+'" data-act="cx.outcome" data-arg=\'{"carrier":"intl","v":"'+v[0]+'"}\'>'+v[1]+'</button>').join('')+'</div>');
@@ -4565,7 +4675,8 @@ IJP.screen({
       main = today+ui.tgt(ctx, 'the international health insurer issues in its own system; status and outcome come back to the bank case.')+'<div class="cx-grid"><div class="stack s12">'+cert+'</div><div class="stack s12">'+out+back+'</div></div>';
     }
     const foot = s.tracks.life.stage!=='none' ? '<span class="small muted">Each insurer issues its own policy.</span><span class="grow"></span>'+B('The other insurer\'s policy', {go:'X06'}, 'ghost sm', 'swap') : '';
-    return intlPage(ctx, {cur:'X07', back:'I15', title:t.stage==='issued' ? 'Policy issued: international health' : 'Certificate: international health', sub:'Meera Rao · '+(t.stage==='issued'?'membership '+(t.policyNo||''):ui.trackLabel(t)), main, foot});
+    const inF = IJP.inForce(t);
+    return intlPage(ctx, {cur:'X07', back:'I15', title:inF ? 'Policy issued: international health' : 'Certificate: international health', sub:'Meera Rao · '+(inF?'membership '+(t.policyNo||''):ui.trackLabel(t)), main, foot});
   }
 });
 
@@ -4595,7 +4706,7 @@ IJP.screen({
     guard:'The licensed specialist recommends and is accountable. Deviations need a written justification. No duplicate cover: Meera stays out of the Shield plan. The Shield plan is labelled illustrative.'
   },
   render(ctx){
-    const s = ctx.s, f = s.fna, g = IJP.calc.gap(s), l = s.quotes.life, r = s.quotes.retail, rr = IJP.calc.retail(retailQ(s)), cx = cxs(s), pk = picks(s), lk = s.apps.life.status==='complete';
+    const s = ctx.s, f = s.fna, g = IJP.calc.gap(s), l = s.quotes.life, r = s.quotes.retail, rr = IJP.calc.retail(retailQ(s)), cx = cxs(s), pk = pickLife(s), lk = s.apps.life.status==='complete';
     const dv = pk.life ? deviation(s) : null, share = shareOf(s, 'life'), t = tagOf(ctx, 'life');
     if(!pk.life && !pk.retail) return lifePage(ctx, {cur:'X02', back:'I07', title:'Recommendation summary', sub:'Nothing to recommend here', main:notPartOf(ctx), foot:'<span class="grow"></span>'+B('Back to the bank cart', {go:'I07'}, '', 'cart')});
     const offCard = (title, why) => '<div class="cx-rec cx-rec-off"><b class="ink">'+title+'</b><div class="small muted">'+why+'</div></div>';
@@ -4644,6 +4755,8 @@ IJP.screen({
 });
 
 /* ---------------- X08: life insurer, quote ---------------- */
+/* Smoking status comes from Ananya's own answer in the application (q4), never assumed before she gives it. */
+const smokerTxt = s => { const v = answersOf(s, 'life').q4; return v==='yes' ? 'smoker (declared in this application)' : v==='no' ? 'non-smoker (declared in this application)' : 'smoking status not yet declared'; };
 function fitHtml(s){
   const g = IJP.calc.gap(s).gap, sa = s.quotes.life.sa, dv = deviation(s), pct = g ? Math.min(100, sa/g*100) : 100;
   const txt = !dv ? '<span class="ok-t strong">Closes the shortfall</span> (within SGD 50,000)'
@@ -4666,7 +4779,7 @@ IJP.screen({
     const s = ctx.s, l = s.quotes.life, r = s.quotes.retail, g = IJP.calc.gap(s).gap, rr = IJP.calc.retail(retailQ(s)), a = s.apps.life;
     if(!canView(s, 'life')) return lifePage(ctx, {cur:'X08', back:'I07', title:'Quotation', sub:'Waiting for the client authorisation', main:ui.today(ctx, 'this quote runs in the life insurer\'s own system, with a separate sign-in.')+lifeWaiting(ctx),
       foot:'<span class="grow"></span>'+B('View bank cart', {go:'I07'}, 'ghost', 'cart')+B('Continue to the application', {act:'cx.startApp', arg:'life', go:'X03'}, '', 'arrow', true)});
-    const pk = picks(s), lk = a.status==='complete', chk = (on) => '<span class="cx-box'+(on?' on':'')+'">'+(on?I('check','s16'):'')+'</span>';
+    const pk = pickLife(s), lk = a.status==='complete', chk = (on) => '<span class="cx-box'+(on?' on':'')+'">'+(on?I('check','s16'):'')+'</span>';
     if(!pk.life && !pk.retail) return lifePage(ctx, {cur:'X08', back:'I07', title:'Quotation', sub:'Nothing to quote', main:notPartOf(ctx), foot:'<span class="grow"></span>'+B('View bank cart', {go:'I07'}, '', 'cart')});
     const life = pk.life ? IJP.calc.life(l) : 0, total = life + (pk.retail ? rr.total : 0);
     const lifeC = !pk.life ? sec('Term life', '', '<div class="empty small">Life cover isn\'t part of this request.</div>') : sec('Term life · Ananya Rao', ui.illus('Illustrative plan'),
@@ -4696,7 +4809,7 @@ IJP.screen({
     const main = ui.today(ctx, 'this quote runs in the life insurer\'s own system, with a separate sign-in and Ananya\'s details re-keyed by hand. There is no bank cart: the specialist notes the result by hand.')+
       ui.tgt(ctx, 'the insurer journey\'s quotation, by single sign-on and pre-filled. The quoted '+(pk.life && pk.retail ? 'plans go' : 'plan goes')+' into the bank cart (proposed) once the application is completed.')+
       (lk ? lockBanner(ctx, 'life') : '')+
-      '<div class="cx-who2"><span>'+I('user','s16')+' <b>Proposer'+(pk.life?' and life assured':'')+':</b> Ananya Rao, 46'+(pk.life?', female, non-smoker (declared in this application)':'')+'</span>'+(pk.retail?'<span>'+I('users','s16')+' <b>Shield:</b> '+rr.rows.map(x => esc(x.name)).join(', ')+'</span>':'')+tagOf(ctx, 'life')+'</div>'+
+      '<div class="cx-who2"><span>'+I('user','s16')+' <b>Proposer'+(pk.life?' and life assured':'')+':</b> Ananya Rao, 46'+(pk.life?', female, '+smokerTxt(s):'')+'</span>'+(pk.retail?'<span>'+I('users','s16')+' <b>Shield:</b> '+rr.rows.map(x => esc(x.name)).join(', ')+'</span>':'')+tagOf(ctx, 'life')+'</div>'+
       '<div class="grid2 cx-g2" style="align-items:start">'+lifeC+shieldC+'</div>';
     const blocked = pk.life && deviation(s) && !cxs(s).deviation.reason;
     const foot = '<div class="cx-tot"><span class="tiny muted">'+(pk.life && pk.retail ? 'Both plans' : 'The plan')+', a year (illustrative)</span><b data-live="cx-total">'+sgd(total)+'</b></div><span class="grow"></span>'+
@@ -4725,14 +4838,15 @@ IJP.screen({
     guard:'Medical declarations live only here, never in the bank case or RM Workstation. Each carrier sees only its own packet; the life insurer\'s share rests on the Insurance Desk client authorisation. The bank never binds: the life insurer underwrites and issues.'
   },
   render(ctx){
-    const s = ctx.s, a = s.apps.life, pk = picks(s);
+    const s = ctx.s, a = s.apps.life, pk = pickLife(s);
     if(!pk.life && !pk.retail) return lifePage(ctx, {cur:'X03', back:'I07', title:'Application', sub:'Nothing to apply for', main:notPartOf(ctx), foot:'<button class="btn ghost sm" data-go="G09">'+I('flow','s16')+'Bank orchestration: how this was routed</button><span class="grow"></span>'+B('Back to session close', {go:'I15'}, 'secondary sm')});
     const main = ui.today(ctx, 'the life insurer\'s own system, with a separate sign-in. Ananya\'s details are re-keyed by hand; she signs on the iPad, and client authorisation is a separate request that can take hours.')+
       ui.tgt(ctx, 'the insurer journey, in the browser by single sign-on and pre-filled. Completed here before the cart; Ananya authorises and signs on her phone at checkout.')+
       '<div class="cx-grid"><div class="stack s12">'+(canView(s, 'life') ? appForm(ctx, 'life') : lifeWaiting(ctx))+'</div><div class="stack s12">'+statusCard(ctx, 'life')+'</div></div>';
     const foot = '<button class="btn ghost sm" data-go="G09">'+I('flow','s16')+'Bank orchestration: how this was routed</button><span class="grow"></span>'+
       B('View bank cart', {go:'I07'}, 'ghost sm', 'cart')+B('Back to session close', {go:'I15'}, 'secondary sm');
-    return lifePage(ctx, {cur:'X03', back:'I07', title:'Application', sub:'Proposal LIFE-APP-26-118204 · '+(pk.retail ? 'Ananya Rao, Vikram and Kabir' : 'Ananya Rao')+' · '+(pk.life && pk.retail ? 'term life and the Shield plan' : pk.life ? 'term life' : 'the Shield plan only')+' · '+(a.status==='complete'?'completed draft':'in progress'), main, foot});
+    const who = livesOn(s).map(id => id===IJP.P.client.id ? IJP.P.client.name : IJP.person(id).name);
+    return lifePage(ctx, {cur:'X03', back:'I07', title:'Application', sub:'Proposal LIFE-APP-26-118204 · '+esc(andL(who.length ? who : [IJP.P.client.name]))+' · '+(pk.life && pk.retail ? 'term life and the Shield plan' : pk.life ? 'term life' : 'the Shield plan only')+' · '+appStage(s, 'life'), main, foot});
   }
 });
 
@@ -4756,7 +4870,12 @@ IJP.screen({
   render(ctx){
     const s = ctx.s, t = s.tracks.life;
     let main;
-    if(t.stage!=='issued'){
+    if(IJP.declined(t)){
+      main = '<div class="cx-narrow">'+sec('No policy issued', pill('Declined','bad'),
+        '<p class="small"><b>The life insurer declined the application at underwriting.</b> No policy was issued, so there is no policy number and no schedule.</p>'+
+        '<p class="tiny muted" style="margin-top:6px">The medical reason stays in the life insurer\'s underwriting file. Global Bank receives the outcome type only.</p>'+
+        '<div class="hstack wrap" style="margin-top:8px">'+B('Back to the application', {go:'X03'}, 'secondary sm')+B('Status and outcome to Global Bank', {go:'G05'}, 'ghost sm', 'flow')+'</div>')+'</div>';
+    } else if(t.stage!=='issued'){
       main = '<div class="cx-narrow">'+sec('No policy yet', pill(ui.trackLabel(t), ui.trackKind(t)),
         '<p class="small">'+(t.stage==='stopped' ? '<b>Not submitted: '+esc(t.reason||'')+'.</b> The life insurer has received no application, so there is nothing to underwrite.' : t.stage==='none' ? 'The application has not been submitted. It goes to the life insurer only after Ananya authorises it at Global Bank checkout.' : 'The life insurer is underwriting the application.')+'</p>'+
         '<div class="hstack wrap" style="margin-top:8px">'+B('Back to the application', {go:'X03'}, 'secondary sm')+B('Policy data to Global Bank (policy feed)', {go:'G04'}, 'ghost sm', 'db')+B('Status and outcome to Global Bank', {go:'G05'}, 'ghost sm', 'flow')+'</div>')+'</div>';
@@ -4771,7 +4890,7 @@ IJP.screen({
         o[2] = ({standard:plan+' accepted at standard terms.', rated:plan+' accepted with a 25% premium loading (illustrative), for a condition declared in the application.', exclusion:plan+' accepted with one exclusion for a declared condition; the wording is in the schedule.', declined:'The life insurer could not offer cover.'})[t.outcome] || o[2]; }
       const lifeP = lifeIt ? IJP.calc.finalPremium(lifeIt, s) : 0;
       const sched = sec('Policy schedule', pill('In force', 'ok'),
-        '<div class="cx-polno"><div><div class="tiny muted">Policy number</div><b>'+esc(t.policyNo||'')+'</b></div><div><div class="tiny muted">Issued</div><b>'+esc(t.at||'Wed 28 Oct')+' 2026</b></div><div><div class="tiny muted">Policyowner</div><b>Ananya Rao</b></div><div><div class="tiny muted">Bank case in application</div><b>'+IJP.P.caseId+'</b></div></div>'+
+        '<div class="cx-polno"><div><div class="tiny muted">Policy number</div><b>'+esc(t.policyNo||'')+'</b></div><div><div class="tiny muted">Issued</div><b>'+esc(t.at||IJP.STORY.decided)+' 2026</b></div><div><div class="tiny muted">Policyowner</div><b>Ananya Rao</b></div><div><div class="tiny muted">Bank case in application</div><b>'+IJP.P.caseId+'</b></div></div>'+
         '<table class="table cx-tbl"><thead><tr><th>Plan</th><th>Life assured</th><th>Cover</th><th class="r">A year</th></tr></thead><tbody>'+
         (pk.life ? '<tr><td>Term life (illustrative plan)</td><td>Ananya</td><td>'+sgd(l.sa)+' · '+l.term+' years, to '+(2026+l.term)+(t.outcome==='exclusion' && !pk.retail?' · one exclusion':'')+'</td><td class="r num">'+sgd(lifeP)+(rated?'<div class="tiny warn-t">incl. 25% loading</div>':'')+'</td></tr>'+
         (l.ci ? '<tr><td>Critical illness rider</td><td>Ananya</td><td>Accelerates the sum assured</td><td class="r muted">included</td></tr>' : '')+
@@ -4788,7 +4907,8 @@ IJP.screen({
         '<div class="cx-grid cx-grid-w"><div class="stack s12">'+sched+'</div><div class="stack s12">'+out+back+'</div></div>';
     }
     const foot = s.tracks.intl.stage!=='none' ? '<span class="small muted">Each insurer issues its own policy.</span><span class="grow"></span>'+B('The other insurer\'s policy', {go:'X07'}, 'ghost sm', 'swap') : '';
-    return lifePage(ctx, {cur:'X06', back:'I15', title:t.stage==='issued' ? 'Policy issued' : 'Policy', sub:'Ananya Rao · '+(t.stage==='issued'?'policy '+(t.policyNo||''):ui.trackLabel(t)), main, foot});
+    const inF = IJP.inForce(t);
+    return lifePage(ctx, {cur:'X06', back:'I15', title:inF ? 'Policy issued' : 'Policy', sub:'Ananya Rao · '+(inF?'policy '+(t.policyNo||''):ui.trackLabel(t)), main, foot});
   }
 });
 })();
@@ -5269,16 +5389,20 @@ IJP.screen({
     const s = ctx.s, tr = s.tracks, cl = s.close;
     const prov = ctx.today ? ui.pill('Keyed by hand after calling','warn') : ui.pill('Received · common data standard','ok');
     const track = (k, name) => {
-      const x = tr[k], extra = x.stage==='issued' ? '<dl class="kv" style="margin-top:8px"><dt>Policy</dt><dd>'+esc(x.policyNo||'')+'</dd><dt>Terms</dt><dd>'+(x.outcome==='standard' ? 'Standard terms' : 'Issued. Terms explained to the client by '+P.is.first+'.')+'</dd><dt>Issued</dt><dd>'+esc(x.at||'')+'</dd></dl>' :
+      const x = tr[k], extra = IJP.declined(x) ? '<div class="banner bad" style="margin-top:8px">'+I('alert','s16')+'<div>Declined at underwriting'+(x.at ? ', '+esc(x.at) : '')+'. No policy was issued.</div></div>' :
+        x.stage==='issued' ? '<dl class="kv" style="margin-top:8px"><dt>Policy</dt><dd>'+esc(x.policyNo||'')+'</dd><dt>Terms</dt><dd>'+(x.outcome==='standard' ? 'Standard terms' : 'Issued. Terms explained to the client by '+P.is.first+'.')+'</dd><dt>Issued</dt><dd>'+esc(x.at||'')+'</dd></dl>' :
         x.stage==='stopped' ? '<div class="banner bad" style="margin-top:8px">'+I('alert','s16')+'<div>Stopped: '+esc(x.reason||'')+'</div></div>' :
         x.stage==='none' ? '<div class="small muted" style="margin-top:8px">Not submitted</div>' : '<div class="small muted" style="margin-top:8px">'+esc(ui.trackLabel(x))+(x.at ? ' · '+esc(x.at) : '')+'</div>';
       return '<div class="dk-track '+k+'"><div class="hstack between"><b class="ink">'+name+'</b>'+ui.pill(ui.trackLabel(x), ui.trackKind(x))+'</div>'+extra+
         (k==='intl' && ctx.today ? '<div class="small muted" style="margin-top:8px">The international health insurer is not live in Singapore. Shown as the target.</div>' : '')+
         (x.stage!=='none' ? '<div style="margin-top:8px">'+prov+'</div>' : '')+'</div>';
     };
-    const issued = ['life','intl'].filter(k => tr[k].stage==='issued');
-    const won = issued.length ? '<div class="banner ok">'+I('okc','s16')+'<div><b>Closed-won.</b> Issued: '+issued.map(k => ({life:'the life insurer\'s life and retail medical cover', intl:'the international health insurer\'s international medical cover'})[k]).join(' and ')+'. '+(ctx.today ? 'You close it by hand after calling the life insurer.' : 'Closed automatically from the returned status.')+' Outcome fed back to '+B.engine+' on insight '+P.insightId+'.</div></div>' :
+    const issued = ['life','intl'].filter(k => IJP.inForce(tr[k]));
+    /* The premium debit Ananya authorised at checkout: the recorded amount, the same figure as her phone and the ledger. */
+    const d = s.checkout.debit, debit = s.checkout.submitted && d.status==='authorised' && d.amount ? '<div class="small muted" style="margin-top:6px">Premium debit authorised at checkout: '+IJP.fmt.sgd(d.amount)+' a year, one debit per insurer submitted. Illustrative.</div>' : '';
+    const won = issued.length ? '<div class="banner ok">'+I('okc','s16')+'<div><b>Closed-won.</b> Issued: '+issued.map(k => k==='intl' ? 'the international health insurer\'s international medical cover' : 'the life insurer\'s '+IJP.issuedItems(s, k).map(i => i.id==='life' ? 'term life' : 'retail medical').join(' and ')+' cover').join(' and ')+'. '+(ctx.today ? 'You close it by hand after calling the life insurer.' : 'Closed automatically from the returned status.')+' Outcome fed back to '+B.engine+' on insight '+P.insightId+'.</div></div>' :
       '<div class="banner">'+I('clock','s16')+'<div><b>Not closed yet.</b> No policy issued so far.</div></div>';
+    const wonD = won+debit;
     const lost = s.cart.filter(i => i.status==='declined' || i.status==='removed');
     const no = '<div class="panel"><h3>The client\'s "no"</h3>'+(cl.done ? '<div class="hstack between" style="margin:6px 0"><span>Sitting outcome</span><b class="ink">'+esc(OUT[cl.outcome]||cl.outcome||'')+'</b></div>' : '<div class="small muted" style="margin:6px 0">The sitting has not closed yet.</div>')+
       (lost.length ? lost.map(i => '<div class="dk-row"><span class="dk-dot bad">'+I('x')+'</span><div class="grow"><div class="t">'+esc(i.kind)+' · '+ui.carrierTag(i.carrier)+'</div><div class="s">'+(i.status==='declined' ? 'Declined: '+esc(i.reason||'no reason given') : 'Removed by the specialist')+'</div></div></div>').join('') : '<div class="small muted">Nothing declined or removed. A decline would show here with its reason.</div>')+
@@ -5288,7 +5412,7 @@ IJP.screen({
       cnt.map(c => '<tr><td>'+c.label+'</td><td class="'+(ctx.today?'curt':'')+'">'+c.today+'</td><td class="'+(ctx.tgt?'cur':'')+'">'+c.tgt+'</td><td class="r">'+ui.pill(c.filled?'Filled':'Not yet', c.filled?'ok':'grey')+'</td></tr>').join('')+'</tbody></table></div>';
     return rmws('R08', 'Case status', P.client.name+' · case '+P.caseId, ui.btn('Closed loop and counters', {go:'L01'}, 'secondary sm', 'trend'),
       (ctx.today ? ui.banner('<b>Today:</b> nothing returns to '+B.rmws+'. You call the life insurer for the status and key the outcome by hand; its policy feed brings policy records later.', 'today', 'clock') : ui.banner('<b>Target:</b> status and outcome come back through a common data standard (G05), for both tracks. Not live today.', '', 'trend'))+
-      '<div style="height:12px"></div><div class="dk-col">'+won+'<div class="grid2" style="gap:14px;align-items:stretch">'+track('life','The life insurer · life and retail medical')+track('intl','The international health insurer · international medical')+'</div>'+
+      '<div style="height:12px"></div><div class="dk-col">'+wonD+'<div class="grid2" style="gap:14px;align-items:stretch">'+track('life','The life insurer · life and retail medical')+track('intl','The international health insurer · international medical')+'</div>'+
       '<div class="dk-cols even">'+no+'<div class="panel"><h3>What happens next</h3><div class="stack s8">'+ui.btn('How the status data comes back', {go:'G05'}, 'secondary block', 'db')+ui.btn('Closed loop and counters', {go:'L01'}, 'secondary block', 'trend')+ui.btn('Back to Home', {go:'R01'}, 'ghost block', 'home')+'</div></div></div>'+counters+'</div>');
   }
 });
@@ -5637,7 +5761,7 @@ function step1(ctx, f, R){
   const top = ctx.today
     ? ui.banner('<b>Today:</b> the life insurer\'s own system. '+P.is.first+' has signed in a second time and keys the case in by hand from the Global Bank goal planner. <b>Fields re-keyed so far: '+rk.total+'</b> (illustrative count).', 'today', 'clock')
     : ui.banner('<b>Target:</b> the insurer journey opened in the iPad browser by '+ctx.B.sso+'. The case arrived pre-filled from '+P.caseId+'. Confirm each section with '+P.client.first+'; nothing is typed twice.'+(allConf ? '' : ' <button class="linkbtn" data-act="fx.confirmAll">Confirm all five sections</button>'), allConf ? 'ok' : '', allConf ? 'okc' : 'trend');
-  const kv = [['Name', P.client.name], ['Age', P.client.age], ['NRIC', 'S••••471J (masked)'], ['Residency', P.client.res], ['Occupation', P.client.job], ['Email', P.client.email]];
+  const kv = [['Name', P.client.name], ['Age', P.client.age], ['NRIC', P.client.nric+' (masked)'], ['Residency', P.client.res], ['Occupation', P.client.job], ['Email', P.client.email]];
   const client = '<div class="card flat fx-card">'+secHead(ctx, 'Client', 'client', 6)+
     '<div class="fx-kv">'+kv.map(r => '<div><span class="tiny muted">'+r[0]+'</span><b>'+esc(r[1])+'</b></div>').join('')+'</div></div>';
   const card = n => {
@@ -6126,7 +6250,7 @@ IJP.screen({
           '<div class="small strong ink">When do you collect it?</div>'+seg('gi.car.collect', c.collect, COLLECT.map(d => [d, d]))+
           '<div class="small muted">Cover starts that day. We only know you paid a dealer a deposit, so these are your answers.</div></div>'+
         '<div class="card stack s12"><h3>Who drives</h3>'+
-          '<div class="hstack between small"><span><b class="ink">Ananya Rao</b> · main driver<br><span class="muted">NRIC S****471A</span></span>'+ui.pill('From Global Bank','ok')+'</div>'+
+          '<div class="hstack between small"><span><b class="ink">Ananya Rao</b> · main driver<br><span class="muted">NRIC '+esc(P.client.nric)+'</span></span>'+ui.pill('From Global Bank','ok')+'</div>'+
           '<label class="check"><input type="checkbox" data-bind="gi.car.named"'+(c.named?' checked':'')+'><span class="grow">Add Vikram as a named driver</span></label>'+
           '<div class="divider"></div><div class="field"><label>No-claim discount (NCD) you carry</label>'+sel('gi.car.ncd', c.ncd, NCDS.map(n => [n, n+'%']))+'</div>'+
           '<div class="field"><label>Claims in the last 3 years</label>'+sel('gi.car.claims', c.claims, [[0,'None'],[1,'1 claim'],[2,'2 or more']])+'</div>'+
@@ -6168,7 +6292,7 @@ IJP.screen({
     const ok = c.confirm;
     return '<div class="app">'+ui.appbar({title:'Check and pay', sub:q.t.name+' · '+(q.ev?'electric':'petrol')+' car', back:'M02'})+
       '<div class="app-body stack s16">'+
-        '<div class="card stack s8"><h3>About you</h3>'+pf('Name', P.client.name)+pf('NRIC', 'S****471A')+pf('Mobile', '+65 9*** *471')+pf('Email', P.client.email)+pf('Address', 'Singapore (street masked)')+
+        '<div class="card stack s8"><h3>About you</h3>'+pf('Name', P.client.name)+pf('NRIC', P.client.nric)+pf('Mobile', '+65 9*** *471')+pf('Email', P.client.email)+pf('Address', 'Singapore (street masked)')+
           '<div class="small muted">Spot something wrong? Change it in Global Bank Mobile settings, or tell '+P.rm.first+'.</div></div>'+
         '<div class="card stack s8"><h3>Car and drivers</h3><dl class="kv"><dt>Car</dt><dd>'+(q.ev?'Electric':'Petrol')+' car, 2026, registration pending</dd><dt>Cover</dt><dd>'+q.t.name+'</dd><dt>Drivers</dt><dd>Ananya (main)'+(c.named?', Vikram':'')+'</dd><dt>Add-ons</dt><dd>'+([q.evc&&'Battery and cable',q.prot&&'NCD protector',q.ws&&'Brand workshop'].filter(Boolean).join(', ')||'None')+'</dd><dt>Starts</dt><dd>'+esc(c.collect||'3 Nov')+' 2026, for 12 months</dd></dl></div>'+
         '<div class="card stack s8"><h3>Your driving history</h3><dl class="kv"><dt>No-claim discount</dt><dd>'+c.ncd+'%</dd><dt>Claims in 3 years</dt><dd>'+(['None','1 claim','2 or more'])[Math.min(2,c.claims)]+'</dd></dl>'+
@@ -6326,21 +6450,47 @@ IJP.action('pad.review', () => { const s = IJP.state; s.goals.reviewed = true;
 IJP.action('pad.retire', v => { const r = IJP.state.goals.items.find(x => x.id==='retire'); if(r && v) r.year = 1980 + Number(v); });
 /* Retail medical (the Shield plan) is for the people whose scope is Singapore. Nobody with the international plan is added
    to it as well: that would be duplicate cover (guardrail 3). */
+/* An insurer that already holds an application from this case (submitted at an earlier checkout) takes no new product
+   in a later round: its products are switched off and shown as already with the insurer. */
+const heldK = (s, k) => IJP.heldByCarrier(s, k==='intl' ? 'intl' : 'life');
 const syncScope = s => {
   const sc = s.rec.scope;
   s.quotes.retail.members = FAM().map(m => m.id).filter(id => sc[id]==='retail');
-  s.rec.pick.intl = FAM().some(m => sc[m.id]==='intl'); s.rec.pick.retail = s.quotes.retail.members.length > 0;
+  s.rec.pick.intl = FAM().some(m => sc[m.id]==='intl') && !heldK(s, 'intl'); s.rec.pick.retail = s.quotes.retail.members.length > 0 && !heldK(s, 'retail');
 };
-const applySuggest = s => { const pt = pathOf(s); Object.assign(s.rec.scope, pt ? pt.scope : {ananya:'retail', vikram:'retail', kabir:'retail', meera:'intl'});
-  pad(s).also = {}; syncScope(s); s.rec.pick.life = pt ? pt.life : true; s.rec.done = false; };
-IJP.action('pad.suggest', () => applySuggest(IJP.state));
+/* What a scope change means for applications already made. Nobody left on the international plan: its cart item goes and
+   its application is reset. A change in who is on the Shield plan: the life insurer's application is reopened (its products
+   leave the cart, the stale Shield item is dropped) and completed again with the new lives. Nobody ends up on two plans. */
+const scopeSnap = s => ({intl:FAM().some(m => s.rec.scope[m.id]==='intl'), retail:IJP.retailMembers(s).slice().sort().join()});
+const scopeEffects = (s, before) => {
+  const after = scopeSnap(s);
+  if(before.intl && !after.intl && !IJP.heldByCarrier(s, 'intl') && (s.cart.some(i => i.id==='intl') || s.apps.intl.status!=='none')){
+    s.cart = s.cart.filter(i => i.id!=='intl'); Object.assign(s.apps.intl, {status:'none', answers:{}, completedAt:null});
+    IJP.log(P.is.name, 'International application set aside', 'Nobody in the recommendation is on the international plan now: the draft and its cart item are withdrawn', 'application');
+  }
+  if(before.retail!==after.retail && !IJP.heldByCarrier(s, 'life') && (s.apps.life.status==='complete' || s.cart.some(i => i.carrier==='life'))){
+    if(IJP.reopenApp) IJP.reopenApp(s, 'life', 'who is on the Shield plan changed in the recommendation, so the application is completed again with the new lives');
+    s.cart = s.cart.filter(i => i.id!=='retail');
+  }
+  IJP.authCheck(s);
+};
+/* Nothing in the recommendation changes once the applications were submitted at checkout. */
+const recLocked = s => !!s.checkout.submitted;
+const applySuggest = s => { const pt = pathOf(s), before = scopeSnap(s);
+  Object.assign(s.rec.scope, pt ? pt.scope : {ananya:'retail', vikram:'retail', kabir:'retail', meera:'intl'});
+  /* Cover from an earlier round in this case stays as it is: Meera's international plan, and the Shield plan's members. */
+  if(heldK(s, 'intl') && !IJP.declined(s.tracks.intl) && IJP.issuedItems(s, 'intl').length) s.rec.scope.meera = 'intl';
+  if(!IJP.declined(s.tracks.life)) ((IJP.issuedItems(s, 'life').find(i => i.id==='retail') || {}).insured || []).forEach(id => { if(id in s.rec.scope) s.rec.scope[id] = 'retail'; });
+  pad(s).also = {}; syncScope(s); s.rec.pick.life = (pt ? pt.life : true) && !heldK(s, 'life'); s.rec.done = false; scopeEffects(s, before); };
+IJP.action('pad.suggest', () => { const s = IJP.state; if(!recLocked(s)) applySuggest(s); });
 /* The international health insurer's application and the cart insure Meera, the one family member living abroad. */
 const intlOk = id => id==='meera';
-IJP.action('pad.scope', a => { const s = IJP.state; if(!a || !a.id || (a.v==='intl' && !intlOk(a.id))) return; s.rec.scope[a.id] = a.v; delete pad(s).also[a.id]; syncScope(s); s.rec.done = false; });
+IJP.action('pad.scope', a => { const s = IJP.state; if(!a || !a.id || (a.v==='intl' && !intlOk(a.id)) || recLocked(s)) return; const before = scopeSnap(s);
+  s.rec.scope[a.id] = a.v; delete pad(s).also[a.id]; syncScope(s); s.rec.done = false; scopeEffects(s, before); });
 /* "Also add the Shield plan" on top of international cover is not offered (no duplicate cover). Kept only to clear a choice
    saved by an earlier build. */
-IJP.action('pad.also', id => { const s = IJP.state, al = pad(s).also; if(al[id]){ delete al[id]; syncScope(s); s.rec.done = false; } });
-IJP.action('pad.pick', k => { const s = IJP.state; s.rec.pick[k] = !s.rec.pick[k]; s.rec.done = false; });
+IJP.action('pad.also', id => { const s = IJP.state, al = pad(s).also; if(al[id] && !recLocked(s)){ const before = scopeSnap(s); delete al[id]; syncScope(s); s.rec.done = false; scopeEffects(s, before); } });
+IJP.action('pad.pick', k => { const s = IJP.state; if(recLocked(s) || heldK(s, k)) return; s.rec.pick[k] = !s.rec.pick[k]; s.rec.done = false; });
 const SCOPEL = {intl:'international (international health insurer)', retail:'Shield plan', employer:'employer plan only', none:'none'};
 IJP.action('pad.recommend', () => { const s = IJP.state, r = s.rec; r.done = true;
   const sc = FAM().map(m => m.name+': '+(SCOPEL[r.scope[m.id]]||'not set')).join(', ');
@@ -6374,7 +6524,7 @@ IJP.action('pad.reopen', () => { IJP.state.copilot.signedOff = false; IJP.log(P.
 IJP.action('pad.sendCopy', () => { const s = IJP.state; pad(s).sent = true;
   IJP.log(P.is.name, 'Summary sent to the client', 'Session summary and next steps to Ananya\'s secure inbox in '+B.app, 'servicing'); });
 const OUTL = {'bought-all':'Bought everything', 'bought-some':'Bought some, not all', deferred:'Wants time to think', declined:'Decided not to buy'};
-const GOING = ['submitted','underwriting','issued'];
+const GOING = ['submitted','underwriting','issued','declined'];
 /* The outcomes offered on I15 must agree with what actually happened at checkout. */
 const closeDefaults = s => {
   const ks = ['life','intl'], go = ks.filter(k => GOING.includes(s.tracks[k].stage)), stop = ks.filter(k => s.tracks[k].stage==='stopped');
@@ -6734,10 +6884,11 @@ function prodCard(ctx, k){
     retail:{c:'life', kind:'Retail medical', t:'Integrated Shield plan (illustrative)', why:'Private hospital cover in Singapore that stays with you if Ananya changes job.'},
     life:{c:'life', kind:'Life', t:'Term life cover', why:'Clears the mortgage and keeps the children\'s plans on track if the worst happens. Shortfall today: '+f.compact(gap.gap)+'.'}
   }[k];
-  const can = who.length > 0, on = s.rec.pick[k] && can, a = appOf(s, D.c), ast = APPST[a.status] || APPST.none, inC = s.cart.find(i => i.id===k);
+  const held = heldK(s, k), sent = held && IJP.issuedItems(s, D.c).some(i => i.id===k);
+  const can = who.length > 0 && !held, on = s.rec.pick[k] && can, a = appOf(s, D.c), ast = held ? (sent ? ['Submitted earlier in this case','ok'] : ['Insurer already has this case\'s application','grey']) : APPST[a.status] || APPST.none, inC = held ? null : s.cart.find(i => i.id===k);
   const tog = can ? '<button class="toggle'+(on?' on':'')+'" data-act="pad.pick" data-arg="'+k+'" aria-label="Include '+esc(D.t)+'"></button>'
-    : '<button class="toggle" disabled aria-label="Not needed on this scope"></button>';
-  return '<div class="card stack s8 pad-x-prod'+(on?' on':'')+'"><div class="hstack between">'+ui.carrierTag(D.c)+'<span class="hstack" style="gap:8px"><span class="tiny strong '+(on?'accent-t':'muted')+'">'+(on?'Recommended':can?'Left out':'Not needed')+'</span>'+tog+'</span></div>'+
+    : '<button class="toggle" disabled aria-label="'+(held ? 'Already with the insurer' : 'Not needed on this scope')+'"></button>';
+  return '<div class="card stack s8 pad-x-prod'+(on?' on':'')+'"><div class="hstack between">'+ui.carrierTag(D.c)+'<span class="hstack" style="gap:8px"><span class="tiny strong '+(on?'accent-t':'muted')+'">'+(on?'Recommended':held?'Already with the insurer':can?'Left out':'Not needed')+'</span>'+tog+'</span></div>'+
     '<div class="tiny strong muted">'+D.kind.toUpperCase()+'</div><b class="ink">'+esc(D.t)+'</b>'+
     '<div class="small"><b>For</b> '+(can ? esc(andList(who)) : '<span class="muted">nobody on this scope</span>')+'</div><div class="small muted">'+D.why+'</div>'+
     '<div class="hstack wrap" style="gap:6px;margin-top:auto">'+(ctx.today && k==='intl' ? ui.pill('Not yet connected in Singapore','warn') : ui.pill(ast[0], ast[1]))+(inC ? ui.pill(inC.status==='in' ? 'In your cart' : 'Cart: '+inC.status, inC.status==='in' ? 'ok' : 'grey') : '')+'</div></div>';
@@ -6755,9 +6906,12 @@ IJP.screen({
   render(ctx){
     const s = ctx.s, r = s.rec, sc = r.scope, al = pad(s).also, f = ctx.fmt;
     const unset = FAM().some(m => !sc[m.id]);
+    const lockR = recLocked(s);
     const rows = FAM().map(m => { const v = sc[m.id];
       return '<div class="pad-x-scope"><div class="hstack"><div class="avatar">'+m.init+'</div><div><b class="ink">'+m.name+'</b><div class="tiny muted">'+WHERE[m.id]+'</div></div></div>'+
-        '<div class="pad-x-scrow"><div class="seg pad-x-seg">'+SCOPE_OPTS.map(o => !intlOk(m.id) && o[0]==='intl'
+        '<div class="pad-x-scrow"><div class="seg pad-x-seg">'+SCOPE_OPTS.map(o => lockR
+          ? '<button class="'+(v===o[0]?'on':'')+'" disabled title="Submitted at checkout: the recommendation is closed"><span>'+o[1]+'</span>'+(o[2]?'<small>'+o[2]+'</small>':'')+'</button>'
+          : !intlOk(m.id) && o[0]==='intl'
           ? '<button disabled title="International cover is for Meera, who lives abroad"><span>'+o[1]+'</span><small>Meera only</small></button>'
           : '<button class="'+(v===o[0]?'on':'')+'"'+ui.attrs({act:'pad.scope', arg:{id:m.id, v:o[0]}})+'><span>'+o[1]+'</span>'+(o[2]?'<small>'+o[2]+'</small>':'')+'</button>').join('')+'</div>'+
         '<div class="stack s4"><div class="tiny muted">'+personNote(m.id, v)+'</div>'+(v==='intl' ? '<div class="tiny muted">'+I('info','s16')+' No Shield plan on top: it would be duplicate cover.</div>' : '')+'</div></div></div>'; }).join('');
@@ -6773,12 +6927,15 @@ IJP.screen({
     const carBtn = (on, label, t, icon, offWhy) => !on ? btnDis(label, offWhy, pc, t, icon) : canGo ? ui.btn(label, goA(t), pc, icon) : btnDis(label, 'Choose cover for each person first', pc, t, icon);
     const intlBtn = carBtn(r.pick.intl && FAM().some(m => sc[m.id]==='intl'), 'Quote in the international health insurer\'s system', 'X04', 'globe', 'The international health insurer isn\'t in the recommendation');
     const lifeBtn = carBtn(r.pick.retail || r.pick.life, 'Life insurer journey: retail medical and life', 'X02', 'shield', 'No life insurer product in the recommendation');
-    const pt = pathOf(s);
+    const pt = pathOf(s), PN = {intl:'international medical for Meera', retail:'the Shield plan', life:'term life'};
+    const prior = ['intl','life'].filter(k => IJP.heldByCarrier(s, k) && !(s.checkout.submitted)).flatMap(k => IJP.issuedItems(s, k).map(i => PN[i.id]+' ('+lc(ui.trackLabel(s.tracks[k]))+')'));
     const ask = pt ? '<div class="card pale hstack top pad-x-ask">'+I('heart','s24')+'<div class="grow"><div class="eyebrow">You asked for</div><b class="ink" style="font-size:16px">Ananya asked for: '+pt.ask+'</b>'+
-      '<div class="small">You started this in the Health tab. I\'ve set up '+pt.prod+' first. If the needs analysis shows another gap, I\'ll show you here, and you decide whether to add it.</div></div></div>' : '';
+      '<div class="small">You started this in the Health tab. I\'ve set up '+pt.prod+' first. If the needs analysis shows another gap, I\'ll show you here, and you decide whether to add it.</div>'+
+      (prior.length ? '<div class="small muted" style="margin-top:4px">'+I('lock','s16')+' This is a new application. Already submitted earlier in this case, and unchanged: '+esc(andList(prior))+'.</div>' : '')+'</div></div>' : '';
     return '<div class="pad">'+ui.padHead({title:'What I recommend, and why', sub:'Prepared with you after the needs analysis · '+P.is.name+' is accountable for the advice', right:ui.btn('Cart · '+live.length+(live.length ? ' · '+f.sgd(total) : ''), {go:'I07'}, 'secondary sm', 'cart')})+
       '<div class="pad-body stack s12">'+(ctx.today ? ui.today(ctx, 'there is no bank-side recommendation space. The recommendation happens inside the life insurer\'s own system, and the international health insurer isn\'t connected in Singapore, so Meera\'s international cover can\'t be offered in the same sitting.') : '')+
         ask+'<div class="card stack s4"><div class="hstack between"><h3>1 · Health cover: where each of you lives and is treated</h3>'+(unset ? ui.btn('Use the needs analysis suggestions', {act:'pad.suggest'}, 'sm', 'spark') : '<span class="tiny muted">Scope before any insurer</span>')+'</div>'+rows+
+          (lockR ? '<div class="tiny muted" style="margin-top:6px">'+I('lock','s16')+' Submitted at checkout: the recommendation is closed and can\'t change now.</div>' : '')+
           '<div class="stack s4" style="margin-top:8px" data-live="dup">'+dupHtml+'</div></div>'+
         '<div class="hstack between"><h3>2 · '+IJP.recHeadline(s)+'</h3><span class="small muted">Each round trip: quote and application in the insurer\'s own system, then back to your cart</span></div>'+
         '<div class="grid3" style="align-items:stretch">'+prodCard(ctx,'intl')+prodCard(ctx,'retail')+prodCard(ctx,'life')+'</div>'+
@@ -6793,19 +6950,23 @@ IJP.screen({
    I07 Cart (client view)
    ====================================================================== */
 function cartItemRow(ctx, i){
-  const f = ctx.fmt, a = i.app || appOf(ctx.s, i.carrier).status, sys = i.carrier==='intl' ? 'the international health insurer\'s' : 'the life insurer\'s';
+  const f = ctx.fmt, a = (ctx.s.apps && ctx.s.apps[i.carrier] ? ctx.s.apps[i.carrier].status : i.app) || 'none', sys = i.carrier==='intl' ? 'the international health insurer\'s' : 'the life insurer\'s';
   const appLine = ctx.today && i.carrier==='intl' ? 'Not yet connected in Singapore · shown as the application would complete in the insurer\'s own system' : a==='complete' ? 'Application completed in '+sys+' system · not submitted yet' : a==='in-progress' ? 'Application in progress in '+sys+' system' : 'Quoted in '+sys+' system · application to complete';
   const s = ctx.s, tr = s.tracks[i.carrier];
   if(s.checkout.submitted){
     const st = i.status!=='in' ? [i.status==='declined' ? 'Declined' : 'Removed', i.status==='declined' ? 'bad' : 'grey'] : tr.stage==='none' ? ['Not submitted','grey'] : [tr.stage==='stopped' ? 'Stopped' : ui.trackLabel(tr), ui.trackKind(tr)];
-    const line = i.status!=='in' ? 'Not part of the submission' : tr.stage==='issued' ? 'Policy issued'+(tr.policyNo ? ' · '+tr.policyNo : '') : tr.stage==='stopped' ? 'Not submitted: '+(tr.reason||'stopped at checkout') : 'Submitted to '+CN[i.carrier]+' · the insurer is reviewing it';
+    const dec = IJP.declined(tr);
+    const line = i.status!=='in' ? 'Not part of the submission' : dec ? 'Declined at underwriting: no policy issued' : tr.stage==='issued' ? 'Policy issued'+(tr.policyNo ? ' · '+tr.policyNo : '') : tr.stage==='stopped' ? 'Not submitted: '+(tr.reason||'stopped at checkout') : 'Submitted to '+CN[i.carrier]+' · the insurer is reviewing it';
     return '<div class="pad-x-item'+(i.status!=='in'?' out':'')+'"><div class="pad-x-avas">'+(i.insured||[]).map(id => '<span class="avatar">'+IJP.person(id).init+'</span>').join('')+'</div>'+
       '<div class="grow"><b class="ink">'+esc(i.title)+'</b><div class="small">'+esc(i.kind)+' · '+esc(tierTxt(i.plan))+' · for '+esc(andList((i.insured||[]).map(pn)))+'</div>'+intlToday(ctx, i.carrier)+
-      '<div class="tiny strong '+(tr.stage==='stopped' || i.status!=='in' ? 'bad-t' : 'ok-t')+'" style="margin-top:3px">'+I(tr.stage==='stopped' || i.status!=='in' ? 'x' : 'send','s16')+' '+esc(line)+'</div></div>'+
+      '<div class="tiny strong '+(tr.stage==='stopped' || dec || i.status!=='in' ? 'bad-t' : 'ok-t')+'" style="margin-top:3px">'+I(tr.stage==='stopped' || dec || i.status!=='in' ? 'x' : 'send','s16')+' '+esc(line)+'</div></div>'+
       '<div class="right"><b class="num ink">'+f.sgd(IJP.calc.finalPremium(i, s))+'</b><div class="tiny muted">a year</div></div>'+ui.pill(st[0], st[1])+'</div>';
   }
+  /* An item whose application was reopened comes back only when the application is completed again. */
+  const reopened = i.status!=='in' && a!=='complete';
   const act = i.status==='in' ? ui.btn('Remove', {act:'cart.remove', arg:i.id}, 'ghost sm', 'close')
-    : '<span class="stack s4" style="align-items:flex-end">'+ui.pill(i.status==='declined' ? 'Declined' : 'Removed', i.status==='declined' ? 'bad' : 'grey')+ui.btn('Restore', {act:'cart.restore', arg:i.id}, 'ghost sm', 'refresh')+'</span>';
+    : '<span class="stack s4" style="align-items:flex-end">'+ui.pill(i.status==='declined' ? 'Declined' : 'Removed', i.status==='declined' ? 'bad' : 'grey')+
+      (reopened ? ui.btn('Complete the application again', {go:i.carrier==='intl' ? 'X05' : 'X03'}, 'ghost sm', 'edit') : ui.btn('Restore', {act:'cart.restore', arg:i.id}, 'ghost sm', 'refresh'))+'</span>';
   return '<div class="pad-x-item'+(i.status!=='in'?' out':'')+'"><div class="pad-x-avas">'+(i.insured||[]).map(id => '<span class="avatar">'+IJP.person(id).init+'</span>').join('')+'</div>'+
     '<div class="grow"><b class="ink">'+esc(i.title)+'</b><div class="small">'+esc(i.kind)+' · '+esc(tierTxt(i.plan))+' · for '+esc(andList((i.insured||[]).map(pn)))+'</div><div class="tiny muted">'+esc(i.detail||'')+'</div>'+
       '<div class="tiny strong '+(a==='complete'?'ok-t':'warn-t')+'" style="margin-top:3px">'+I(a==='complete'?'okc':'clock','s16')+' '+appLine+'</div>'+(i.status==='declined' && i.reason ? '<div class="tiny bad-t">Reason: '+esc(i.reason)+'</div>' : '')+'</div>'+
@@ -6848,7 +7009,7 @@ IJP.screen({
         body+
         (ctx.tgt ? ui.tgt(ctx, 'the cart is proposed in this prototype: one Global Bank list of completed applications, grouped by insurer, checked out in one sitting.') : '')+
       '</div>'+summary+'</div></div>'+
-      (locked ? foot('Submitted '+(s.tracks.life.at || s.tracks.intl.at || '')+'. Nothing in the cart can change now.', ui.btn('Back to checkout', {go:'I12'}, 'ghost', 'back')+ui.btn('Close the session', {go:'I15'}, '', 'arrow'))
+      (locked ? foot('Submitted '+(['life','intl'].map(k => s.tracks[k].sentAt).find(Boolean) || IJP.STORY.sitting)+'. Nothing in the cart can change now.', ui.btn('Back to checkout', {go:'I12'}, 'ghost', 'back')+ui.btn('Close the session', {go:'I15'}, '', 'arrow'))
         : foot('', ui.btn('Back to the recommendation', {go:'I06'}, 'ghost', 'back')+(want.intl || has('intl') ? ui.btn('Back to the international health insurer', {go:'X04'}, 'secondary', 'globe') : '')+(want.life || has('life') ? ui.btn('Continue to the life insurer journey', {go:'X02'}, 'secondary', 'shield') : '')))+'</div>';
   }
 });
@@ -6860,8 +7021,9 @@ const CS = {none:['Not requested','grey'], requested:['Waiting on Ananya\'s phon
 function submitState(s){
   const c = s.checkout, cars = IJP.calc.cartCarriers();
   const appr = cars.filter(k => c.consent[k]==='approved');
-  let reason = null;
+  let reason = null; const dup = IJP.medicalOverlap(s);
   if(!cars.length) reason = 'Nothing in the cart';
+  else if(dup.length && !c.submitted) reason = andList(dup.map(pn))+(dup.length===1?' is':' are')+' on two medical plans in the cart: remove one before checkout';
   else if(!c.started) reason = 'Send the authorisation requests first';
   else if(cars.some(k => c.consent[k]==='expired')) reason = cap(CN[cars.find(k => c.consent[k]==='expired')])+'\'s request expired: send it again';
   else if(cars.some(k => ['none','requested'].includes(c.consent[k]))) reason = 'Waiting for Ananya to decide on '+andList(cars.filter(k => ['none','requested'].includes(c.consent[k])).map(k => CN[k]));
@@ -6910,10 +7072,13 @@ IJP.screen({
     const flow = '<div class="pad-x-flow">'+steps.map((x,i) => '<div class="fs'+(x[1]?' done':i===cur?' cur':'')+'"><span class="n">'+(x[1] ? I('check','s16') : i+1)+'</span>'+x[0]+'</div>').join('')+'</div>';
     const acct = P.accounts.find(a => a.id===c.debit.account) || P.accounts[0];
     const DS = {none:['Not authorised yet','grey'], authorised:['Authorised','ok'], failed:['Debit failed','bad']}[c.debit.status] || ['–','grey'];
-    const payCars = cars.filter(k => c.consent[k]!=='declined'), payTotal = payCars.reduce((a,k) => a+IJP.calc.cartTotal(k), 0);
+    /* The debit covers the insurers Ananya approved (calc.authorisedTotal); once authorised, the recorded amount is shown. */
+    const authd = c.debit.status==='authorised' && c.debit.amount!=null, waitK = k => !['approved','declined'].includes(c.consent[k]);
+    const waiting = cars.filter(waitK), payTotal = authd ? c.debit.amount : IJP.calc.authorisedTotal(s) + waiting.reduce((a,k) => a+IJP.calc.cartTotal(k), 0);
     const pay = '<div class="card stack s8"><div class="hstack between"><b class="ink">'+I('card','s16')+' Payment</b>'+ui.pill(DS[0], DS[1])+'</div><div class="small">'+esc(acct.label)+'</div>'+
-      cars.map(k => '<div class="hstack between small'+(payCars.includes(k)?'':' muted')+'">'+ui.carrierTag(k)+'<span class="grow"> '+(payCars.includes(k) ? 'one debit' : 'no debit: declined')+'</span><b class="num">'+(payCars.includes(k) ? f.sgd(IJP.calc.cartTotal(k)) : '–')+'</b></div>').join('')+
-      '<div class="divider"></div><div class="hstack between"><b class="ink">A year, illustrative</b><b class="num ink">'+f.sgd(payTotal)+'</b></div><div class="tiny muted">One Global Bank account, one debit per insurer. Ananya approves it on her phone.</div></div>';
+      cars.map(k => { const okK = c.consent[k]==='approved';
+        return '<div class="hstack between small'+(okK?'':' muted')+'">'+ui.carrierTag(k)+'<span class="grow"> '+(okK ? 'one debit' : waitK(k) ? 'one debit, once she approves' : 'no debit: declined')+'</span><b class="num">'+(okK || waitK(k) ? f.sgd(IJP.calc.cartTotal(k)) : '–')+'</b></div>'; }).join('')+
+      '<div class="divider"></div><div class="hstack between"><b class="ink">'+(authd ? 'Authorised, a year' : waiting.length ? 'A year, once she approves' : 'A year, illustrative')+'</b><b class="num ink">'+f.sgd(payTotal)+'</b></div><div class="tiny muted">One Global Bank account, one debit per insurer she approves. Ananya authorises it on her phone.</div></div>';
     let act;
     if(c.submitted){
       const trk = ['life','intl'].filter(k => s.tracks[k].stage!=='none');
@@ -6922,6 +7087,9 @@ IJP.screen({
         '<div class="tiny muted">Each insurer now underwrites its own application. Outcomes can differ.</div>'+
         '<div class="stack s4">'+(s.tracks.life.stage!=='none' ? ui.btn('Life insurer: application status', {go:'X03'}, 'secondary sm block', 'arrow') : '')+(s.tracks.intl.stage!=='none' ? ui.btn('International health insurer: application status', {go:'X05'}, 'secondary sm block', 'arrow') : '')+'</div>'+
         ui.btn('Close the session', {go:'I15'}, 'block', 'arrow')+'</div>';
+    } else if(IJP.medicalOverlap(s).length && !c.started){
+      act = '<div class="card hl stack s8"><b class="ink">Check the cart first</b>'+ui.banner(esc(st.reason)+'. Nobody should be insured twice.', 'warn', 'alert')+
+        btnDis('Send authorisation requests to Ananya\'s phone', 'Remove one of the two medical plans first', 'block', null, 'send')+ui.btn('Back to the cart', {go:'I07'}, 'secondary block', 'back')+'</div>';
     } else if(!c.started){
       act = '<div class="card hl stack s8"><b class="ink">Ready when you are</b><div class="small">Ananya authorises each insurer separately, on her own phone: who gets which data, to submit which application.</div>'+
         ui.btn('Send authorisation requests to Ananya\'s phone', {act:'checkout.start'}, 'block', 'send')+btnDis(st.label, st.reason, 'block', null)+'</div>';
@@ -6966,13 +7134,14 @@ IJP.screen({
     const chosen = s.cart.filter(i => i.status!=='removed').map(i => { const tr = s.tracks[i.carrier];
       const st = i.status==='declined' ? ['Not taken','bad'] : tr.stage==='none' ? ['Not submitted','grey'] : [ui.trackLabel(tr), ui.trackKind(tr)];
       return '<div class="pad-x-row">'+ui.carrierTag(i.carrier)+'<span class="grow small"><b class="ink">'+esc(i.title)+'</b> · '+esc(andList(i.insured.map(pn)))+intlToday(ctx, i.carrier)+'</span><span class="num small">'+f.sgd(IJP.calc.finalPremium(i, s))+'</span>'+ui.pill(st[0], st[1])+'</div>'; }).join('') || '<div class="small muted">Nothing was applied for today.</div>';
-    const sub = !!s.checkout.submitted, goT = d.go, allIss = goT.length>0 && goT.every(k => s.tracks[k].stage==='issued');
+    const sub = !!s.checkout.submitted, goT = d.go, allIss = goT.length>0 && goT.every(k => s.tracks[k].stage==='issued' || IJP.declined(s.tracks[k]));
+    const decK = goT.filter(k => IJP.declined(s.tracks[k])), issK = goT.filter(k => IJP.inForce(s.tracks[k]));
     const step1 = !sub ? '<div class="tl-item cur"><b class="ink">Applications ready to send</b><div class="small muted">Nothing goes to an insurer until Ananya authorises each one at checkout.</div></div>'
       : !goT.length ? '<div class="tl-item stop"><b class="ink">Nothing was sent</b><div class="small muted">Neither insurer was authorised, so no application was submitted.</div></div>'
       : '<div class="tl-item done"><b class="ink">Applications sent to '+andList(goT.map(k => CN[k]))+'</b><div class="small muted">Each insurer has its own application, with only its own data.'+(d.stop.length ? ' '+cap(andList(d.stop.map(k => CN[k])))+': not sent.' : '')+'</div></div>';
     const next = '<div class="timeline pad-x-tlv">'+step1+
       '<div class="tl-item'+(allIss ? ' done' : sub && goT.length ? ' cur' : '')+'"><b class="ink">Each insurer reviews</b><div class="small muted">Outcomes can differ: standard terms, a loading, an exclusion or a decline.</div></div>'+
-      '<div class="tl-item'+(allIss ? ' done' : '')+'"><b class="ink">Policies issued</b><div class="small muted">'+(allIss ? goT.map(k => CT[k]+' '+(s.tracks[k].policyNo||'')).join(' · ')+'. ' : '')+'You get a free-look period to change your mind, set out in each policy.</div></div>'+
+      '<div class="tl-item'+(allIss && issK.length ? ' done' : allIss ? ' stop' : '')+'"><b class="ink">Policies issued</b><div class="small muted">'+(allIss ? issK.map(k => CT[k]+' '+(s.tracks[k].policyNo||'')).concat(decK.map(k => CT[k]+': declined, no policy issued')).join(' · ')+'. ' : '')+(issK.length || !allIss ? 'You get a free-look period to change your mind, set out in each policy.' : '')+'</div></div>'+
       '<div class="tl-item"><b class="ink">'+(ctx.today ? P.is.first+' calls you' : 'Status on your phone')+'</b><div class="small muted">'+(ctx.today ? 'Today nothing comes back to the bank automatically; '+P.is.first+' chases each insurer.' : 'Both applications show in '+B.app+', and '+P.rm.first+' sees progress in '+B.rmws+'.')+'</div></div></div>';
     let outcome;
     if(cl.done){
@@ -7640,16 +7809,16 @@ IJP.screen({
       {c:['Policies with '+B.healthCo, 'No feed', '—'], t:['gap','no system link'], y:['new','proposed, no date']}
     ];
     /* The products the life insurer issued: the set frozen at submission, never the current cart or quote. */
-    const lifeItems = tp.outcome==='declined' ? [] : IJP.issuedItems(s, 'life'), lifeIt = lifeItems.find(i => i.id==='life');
-    const batch = tp.stage==='issued' && lifeItems.length
+    const lifeItems = IJP.inForce(tp) ? IJP.issuedItems(s, 'life') : [], lifeIt = lifeItems.find(i => i.id==='life');
+    const batch = IJP.inForce(tp) && lifeItems.length
       ? '<div class="gl-items">'+lifeItems.map(i => '<div class="gl-it"><span><b class="ink">'+esc(i.kind)+'</b> · '+esc((i.insured||[]).map(id => IJP.person(id).name).join(', '))+'</span><span class="num">'+f.sgd(IJP.calc.finalPremium(i, s))+' a year</span></div>').join('')+
-        '<div class="gl-it"><span>Policy number · status</span><span><span class="gl-mono">'+esc(tp.policyNo||'')+'</span> · in force from '+esc(tp.at||'Wed 28 Oct')+'</span></div>'+
+        '<div class="gl-it"><span>Policy number · status</span><span><span class="gl-mono">'+esc(tp.policyNo||'')+'</span> · in force from '+esc(tp.at||IJP.STORY.decided)+'</span></div>'+
         (lifeIt ? '<div class="gl-it"><span>Sum assured (life)</span><span class="num">'+f.sgd((lifeIt.q||{}).sa||0)+'</span></div>' : '')+'</div>'
-      : tp.stage==='issued' ? '<div class="gl-note">'+cap(B.life)+' declined the application, so no policy arrives.</div>'
+      : IJP.declined(tp) ? '<div class="gl-note">'+cap(B.life)+' declined the application, so no policy arrives.</div>'
       : '<div class="gl-note">No new policy from '+B.life+' on this case yet (track: '+esc(ui.trackLabel(tp))+(tp.reason?', '+esc(tp.reason):'')+').</div>';
     const live = liveCard('In the next feed', batch+
       '<div class="gl-it"><span>Savings plan (existing)</span><span>Anniversary 2 Nov</span></div>'+
-      '<div class="gl-note"><b>'+cap(B.healthCo)+':</b> '+(tb.stage==='issued' ? 'Meera\'s policy <span class="gl-mono">'+esc(tb.policyNo||'')+'</span> is invisible to '+B.policySys+'.' : 'nothing arrives, whatever happens.')+
+      '<div class="gl-note"><b>'+cap(B.healthCo)+':</b> '+(IJP.inForce(tb) ? 'Meera\'s policy <span class="gl-mono">'+esc(tb.policyNo||'')+'</span> is invisible to '+B.policySys+'.' : 'nothing arrives, whatever happens.')+
       '</div>');
     return panel(ctx, {lane:'Data and decisioning', owner:cap(B.life)+' sends · Global Bank reads', sub:'What comes back from the insurer in its policy feed today, what it powers, and what it leaves out.',
       src:SRC,
@@ -7695,9 +7864,9 @@ IJP.screen({
       const sub = !t || t.stage==='none';
       const val = {caseId:P.caseId, carrier:carrierName(k),
         stage: sub ? (a.status==='complete' ? 'draft complete' : appLbl(a.status).toLowerCase()) : ui.trackLabel(t).toLowerCase(),
-        dates: sub ? (a.completedAt ? 'completed '+a.completedAt : '—') : (t.stage==='issued' ? '22 Oct → 28 Oct' : t.at ? 'submitted '+t.at : '—'),
-        outcome: t && t.outcome ? t.outcome+' terms' : (t && t.stage==='stopped' ? 'not submitted' : 'pending'),
-        policyNo: t && t.policyNo || 'pending'}[f];
+        dates: sub ? (a.completedAt ? 'completed '+a.completedAt : '—') : (t.stage==='issued' || t.stage==='declined' ? String(t.sentAt||IJP.STORY.sitting).replace(/^\w+ /, '')+' → '+String(t.at||IJP.STORY.decided).replace(/^\w+ /, '') : (t.sentAt||t.at) ? 'submitted '+(t.sentAt||t.at) : '—'),
+        outcome: t && IJP.declined(t) ? 'declined' : t && t.outcome ? t.outcome+' terms' : (t && t.stage==='stopped' ? 'not submitted' : 'pending'),
+        policyNo: t && IJP.declined(t) ? 'none: declined' : t && t.policyNo || 'pending'}[f];
       return '<span class="gl-mono">'+esc(val)+'</span>'; };
     const row = (f, label, t, y) => ({c:[label, v('life', f), v('intl', f)], t, y});
     const rows = [
@@ -7754,10 +7923,10 @@ const SLOTS = [
     t:['gap','nothing returns'], y:['road','status only (G05)']},
   {k:'Cart', at:'I07', val:s => s.cart.length ? s.cart.map(i => esc(i.kind)+(i.status!=='in'?' ('+esc(i.status)+')':'')).join(' · ')+' · '+IJP.fmt.sgd(IJP.calc.cartTotal())+' a year' : null,
     t:['gap','no cart'], y:['new','one bank cart']},
-  {k:'Policy outcome', at:'G05', val:s => { const T = s.tracks, o = k => T[k].stage==='issued' ? carrierName(k)+': '+esc(T[k].outcome||'standard')+' terms' : null, out = [o('life'), o('intl')].filter(Boolean);
+  {k:'Policy outcome', at:'G05', val:s => { const T = s.tracks, o = k => IJP.declined(T[k]) ? carrierName(k)+': declined' : T[k].stage==='issued' ? carrierName(k)+': '+esc(T[k].outcome||'standard')+' terms' : null, out = [o('life'), o('intl')].filter(Boolean);
       return out.length ? out.join(' · ')+(s.close.outcome ? ' · '+esc(String(s.close.outcome).replace('-', ' ')) : '') : null; },
     t:['live','periodic feed, unlinked'], y:['road','standard and feed']},
-  {k:'Servicing events', at:'R09', val:s => (s.tracks.life.stage==='issued' || s.tracks.intl.stage==='issued' ? 'Free-look period · premiums due · ' : '')+'Home cover with '+B.gi+' renews 14 Nov · savings plan anniversary 2 Nov',
+  {k:'Servicing events', at:'R09', val:s => (IJP.inForce(s.tracks.life) || IJP.inForce(s.tracks.intl) ? 'Free-look period · premiums due · ' : '')+'Home cover with '+B.gi+' renews 14 Nov · savings plan anniversary 2 Nov',
     t:['live','alerts from the feed'], y:['road','follow-up, renewal']}
 ];
 IJP.screen({
@@ -7957,7 +8126,7 @@ function trip(ctx, k){
     st(held && now!=='granted' ? '1 Share: withdrawn' : '1 Share', now==='granted' ? 'ok' : now==='declined' ? 'bad' : '', k==='intl'?'X04':'R03')+I('arrow','s16')+
     st('2 Quote', ['quoted','in-progress','complete'].includes(a.status) ? 'ok' : '', qid)+I('arrow','s16')+
     st('3 Application', a.status==='complete' ? 'ok' : '', aid)+I('arrow','s16')+
-    st('4 Bank cart', items.some(i => i.status==='in') ? 'ok' : items.length ? 'bad' : '', 'I07')+I('arrow','s16')+
+    st('4 Bank cart', held || items.some(i => i.status==='in') ? 'ok' : items.length ? 'bad' : '', 'I07')+I('arrow','s16')+
     st('5 Authorise · sign · pay', gatesOk ? 'ok' : gatesBad ? 'bad' : '', 'C13')+I('arrow','s16')+
     st('6 Submitted', tr.stage==='none' ? '' : tr.stage==='stopped' ? 'bad' : 'ok', aid)+'</div>'+
     (held && now!=='granted' ? '<div class="gl-rev">Consent withdrawn for future sharing'+(rv ? ' on '+esc(rv.t) : '')+': nothing further goes to '+esc(carrierName(k))+'. The application already submitted is unchanged.</div>' : '');
@@ -8320,7 +8489,7 @@ IJP.screen({
     const pending = P(s).upload.stage;
     return '<div class="app">'+ui.appbar({title:'My protection, anywhere', sub:'Cover you hold, wherever it was bought', back:'C01'})+
       '<div class="app-body stack s16">'+
-        '<div class="card navy stack s8"><div class="hstack between"><div><div class="small" style="opacity:.8">Policies in your family view</div><div class="bigval" style="color:#fff">'+(pol.length+issued.length)+'</div></div>'+
+        '<div class="card navy stack s8"><div class="hstack between"><div><div class="small" style="opacity:.8">Policies in your family view</div><div class="bigval" style="color:#fff">'+IJP.familyCover(s).count+'</div></div>'+
           '<div class="seg" style="min-width:150px"><button class="'+(pa.ccy!=='sgd'?'on':'')+'" data-set="pa.ccy=orig">Original</button><button class="'+(pa.ccy==='sgd'?'on':'')+'" data-set="pa.ccy=sgd">In SGD</button></div></div>'+
           link('Check the gaps', 'C03', 'ok block')+'</div>'+
         group('Through '+B.bank, 'Bought through us. The insurer is named and we have checked it.', sc, 'Nothing bought through '+B.bank+' yet.')+
@@ -8856,16 +9025,19 @@ IJP.screen({
     const s = ctx.s, c = s.checkout, ks = IJP.calc.cartCarriers();
     const waiting = !c.submitted && c.started && ks.some(k => c.consent[k]==='requested'), decided = c.started && ks.length>0 && ks.every(k => c.consent[k]==='approved' || c.consent[k]==='declined');
     const anyOk = ks.some(k => c.consent[k]==='approved');
+    /* Nobody is insured on two medical plans: until the cart is fixed, there is nothing to approve. */
+    const dup = c.submitted ? [] : IJP.medicalOverlap(s), andN = a => a.length<2 ? (a[0]||'') : a.slice(0,-1).join(', ')+' and '+a[a.length-1];
+    const fix = dup.length ? ui.banner('<b>'+P.is.first+' needs to fix the cart first.</b> '+esc(andN(dup.map(x => IJP.person(x).name)))+(dup.length===1?' is':' are')+' on two medical plans in it. Nothing can be approved until one of them is removed.', 'warn', 'alert') : '';
     return '<div class="app">'+ui.appbar({title:'Your OK, insurer by insurer', sub:P.is.name+' sent '+ks.length+' request'+(ks.length===1?'':'s'), back:'C01'})+
       '<div class="app-body stack s16">'+
         '<p>'+P.is.first+' needs your OK before anything goes to an insurer. Each insurer gets its own request and sees only its own list.</p>'+
         ctx.t(ui.banner('<b>Today:</b> client authorisation is a separate request that can take hours. The international health insurer isn\'t live in '+B.market+', so its request is shown as the target.', 'today', 'clock'),
               ui.banner('<b>Target:</b> the request arrives on your phone in the sitting. Approving takes under two minutes and '+P.is.first+' sees it straight away.', '', 'trend'))+
-        (c.started ? ks.map(k => consentCard(ctx, k)).join('') : '<div class="empty">No request yet. '+P.is.first+' sends these from checkout when you\'re ready.</div>')+
+        (fix ? fix : c.started ? ks.map(k => consentCard(ctx, k)).join('') : '<div class="empty">No request yet. '+P.is.first+' sends these from checkout when you\'re ready.</div>')+
         (waiting ? '<div class="pb-presenter">'+I('clock','s16')+'<span>Presenter:</span>'+ui.btn(ctx.t('Hours later: no answer ▸','Simulate: link timed out ▸'), {act:'pb.late'}, 'secondary sm')+'</div>' : '')+
         ui.banner('<b>We will never call to ask for your password or OTP.</b> If someone does, hang up and call us on the number on your card.', '', 'shieldok')+
         (decided && !anyOk ? ui.banner('Neither insurer will receive anything. You can still talk to '+P.rm.first+' or change your mind above.', 'warn') : '')+
-      '</div><div class="sticky-cta">'+(decided ? ui.btn(c.submitted?'See what was signed':anyOk?'Continue to sign':'Continue', {go:'C14'}, 'block') : '<button class="btn block" disabled>Continue to sign</button><div class="small muted center">'+(c.started?'Answer each request to continue. Declining is fine.':'Nothing to answer yet.')+'</div>')+'</div></div>';
+      '</div><div class="sticky-cta">'+(decided && !fix ? ui.btn(c.submitted?'See what was signed':anyOk?'Continue to sign':'Continue', {go:'C14'}, 'block') : '<button class="btn block" disabled>Continue to sign</button><div class="small muted center">'+(fix ? 'The cart needs fixing first.' : c.started?'Answer each request to continue. Declining is fine.':'Nothing to answer yet.')+'</div>')+'</div></div>';
   }
 });
 IJP.action('pb.late', () => { const c = IJP.state.checkout; Object.keys(c.consent).forEach(k => { if(c.consent[k]==='requested') IJP.actions['consent.set']({carrier:k, value:'expired'}); }); });
@@ -8899,7 +9071,8 @@ IJP.screen({
         (c.signed[k] ? '<div class="stack s4">'+(c.submitted?'<span class="pill ok" style="align-self:flex-start">Final: submitted</span>':'')+SIG+'<span class="small muted">Signed by '+P.client.name+' · '+IJP.storyTime()+'</span></div>'
           : ui.btn('Sign the application to '+THE[k], {act:'sign', arg:k}, 'block', 'pen'))+'</div>';
     }).join('');
-    const amt = ks.map(k => SHORT[k]+' '+f.sgd(carrierAmount(k))).join(' · ');
+    /* One amount for the debit: the approved insurers' premiums (calc.authorisedTotal), recorded when she authorises it. */
+    const amt = ks.map(k => SHORT[k]+' '+f.sgd(carrierAmount(k))).join(' · ')+(ks.length>1 ? ' · '+f.sgd(d.status==='authorised' && d.amount ? d.amount : IJP.calc.authorisedTotal(s))+' a year in all' : '');
     const accts = P.accounts.map(a => '<button class="radio-card '+(d.account===a.id?'on':'')+'" '+(d.status==='authorised'?'disabled':'data-set="checkout.debit.account='+a.id+'"')+'><span class="rc-dot"></span><span><b class="ink">'+esc(a.label)+'</b>'+
       (d.status==='failed' && d.account!==a.id ? '<br><span class="small ok-t">Try this one</span>' : '')+'</span></button>').join('');
     let pay;
@@ -8913,9 +9086,12 @@ IJP.screen({
         : '<button class="btn block" disabled>Authorise two debits, one per insurer</button><div class="small muted center">Sign each application first.</div>')+'</div>'+
       (d.status!=='failed' ? '<div class="pb-presenter"><span>Presenter:</span>'+ui.btn('Try a failed debit', {act:'debit.set', arg:{status:'failed'}}, 'secondary sm')+'</div>' : '');
     const done = allSigned && d.status==='authorised';
-    const doneBlock = done ? '<div class="card hl stack s8"><div class="hstack">'+I('okc')+'<b class="ink">Your part is done.</b></div><p>'+P.is.first+' will submit to '+ks.map(k => THE[k]).join(' and ')+'.</p>'+
+    const sentTo = ks.filter(k => IJP.heldByCarrier(s, k)), stopTo = ks.filter(k => s.tracks[k].stage==='stopped');
+    const doneTxt = !c.submitted ? P.is.first+' will submit to '+ks.map(k => THE[k]).join(' and ')+'.'
+      : (sentTo.length ? P.is.first+' submitted it to '+sentTo.map(k => THE[k]).join(' and ')+' on '+esc(s.tracks[sentTo[0]].sentAt||IJP.STORY.sitting)+'.' : '')+(stopTo.length ? ' Not submitted to '+stopTo.map(k => THE[k]).join(' or ')+'.' : '');
+    const doneBlock = done ? '<div class="card hl stack s8"><div class="hstack">'+I('okc')+'<b class="ink">Your part is done.</b></div><p>'+doneTxt+'</p>'+
       '<div class="stack s8">'+(ks.includes('life')?ui.btn('See the life insurer\'s application status', {go:'X03'}, 'secondary block'):'')+(ks.includes('intl')?ui.btn('See the international health insurer\'s application status', {go:'X05'}, 'secondary block'):'')+
-      ui.btn('Back to '+P.is.first+'\'s iPad to submit', {go:'I12'}, 'block')+(c.submitted ? ui.btn('Follow your applications', {go:'C15'}, 'ghost block') : '')+'</div></div>' : '';
+      (c.submitted ? ui.btn('Follow your applications', {go:'C15'}, 'block') : ui.btn('Back to '+P.is.first+'\'s iPad to submit', {go:'I12'}, 'block'))+'</div></div>' : '';
     return '<div class="app">'+ui.appbar({title:'Sign your completed applications', sub:'In the same sitting', back:'C13'})+
       '<div class="app-body stack s16">'+ctx.t(ui.banner('<b>Today:</b> the client signs inside the life insurer\'s own system on the specialist\'s iPad, and premium set-up is a separate step. Signing each insurer\'s application on her own phone is proposed.', 'today', 'clock'), ui.banner('<b>Target:</b> the client signs each insurer\'s completed application on her own phone, in the same sitting, and authorises one Global Bank account.', '', 'trend'))+apps+pay+doneBlock+
         ui.vision('one signature and one payment across carriers. Today and in the target state each insurer keeps its own application, signature and debit.')+
@@ -8928,12 +9104,15 @@ const AK = s => ['life','intl'].filter(k => s.cart.some(i => i.carrier===k && i.
 const STEPS = {life:['Submitted','Underwriting','Issued'], intl:['Application','Underwriting','Issued']};
 function track(ctx, k, grey){
   const t = ctx.s.tracks[k], st = t.stage, steps = STEPS[k];
-  const idx = {none:-1, submitted:0, underwriting:1, issued:3}[st];
-  const sub = i => st==='issued' && i===2 ? esc((t.policyNo||'')+(t.outcome&&t.outcome!=='standard'?' · '+t.outcome+' terms':' · standard terms')+' · '+(t.at||'')) :
-    i===0 && (st==='submitted'||st==='underwriting'||st==='issued') ? 'Sent '+esc(t.sentAt||t.at||'in the sitting')+(k==='intl'?' to the international health insurer':' to the life insurer') :
+  const dec = IJP.declined(t);
+  const sub = i => st==='issued' && !dec && i===2 ? esc((t.policyNo||'')+(t.outcome&&t.outcome!=='standard'?' · '+t.outcome+' terms':' · standard terms')+' · '+(t.at||'')) :
+    i===0 && (st==='submitted'||st==='underwriting'||st==='issued'||st==='declined') ? 'Sent '+esc(t.sentAt||t.at||'in the sitting')+(k==='intl'?' to the international health insurer':' to the life insurer') :
     i===1 && st==='underwriting' ? 'With the insurer' : i===1 && st==='submitted' ? 'Waiting for the insurer to pick it up' : '';
   let items;
-  if(st==='stopped'){
+  if(dec){
+    items = steps.slice(0, 2).map(x => '<div class="tl-item done"><b class="ink">'+x+'</b>'+(x===steps[0] ? '<div class="small muted">'+sub(0)+'</div>' : '')+'</div>').join('')+
+      '<div class="tl-item stop"><b class="ink">Declined at underwriting</b><div class="small bad-t">'+esc(t.at||'')+' · no policy was issued</div></div>';
+  } else if(st==='stopped'){
     items = '<div class="tl-item stop"><b class="ink">Stopped before it was sent</b><div class="small bad-t">'+esc(t.reason||'Not submitted')+'</div></div>'+
       steps.slice(1).map(x => '<div class="tl-item" style="opacity:.45"><span class="muted">'+x+'</span></div>').join('');
   } else if(st==='none'){
@@ -8959,7 +9138,9 @@ IJP.screen({
   },
   render(ctx){
     const s = ctx.s, t = s.tracks, any = AK(s).some(k => t[k].stage!=='none'), pending = AK(s).some(k => t[k].stage==='submitted' || t[k].stage==='underwriting');
-    const issued = ['life','intl','gi'].some(k => t[k].stage==='issued');
+    const issued = ['life','intl','gi'].some(k => IJP.inForce(t[k]));
+    /* The premium debit she authorised at checkout: the recorded amount, the same figure as C14, I12 and the ledger. */
+    const d = s.checkout.debit, debit = s.checkout.submitted && d.status==='authorised' && d.amount ? '<div class="small muted">'+I('card','s16')+' Premium debit authorised at checkout: '+f.sgd(d.amount)+' a year, from '+esc((P.accounts.find(a => a.id===d.account)||{}).label||'')+'. Illustrative.</div>' : '';
     const giCard = t.gi.stage==='issued' ? '<div class="card pb-ctop gi stack s8"><div class="hstack between">'+ui.carrierTag('gi')+ui.pill('Issued','ok')+'</div><div class="timeline"><div class="tl-item done"><b class="ink">Travel cover issued</b><div class="small muted">'+esc(t.gi.policyNo||'')+' · '+esc(t.gi.at||'')+'</div></div></div></div>' : '';
     const tracks = '<div class="stack s12">'+AK(s).map(k => track(ctx, k, ctx.today)).join('')+'</div>';
     const body = ctx.today
@@ -8968,8 +9149,8 @@ IJP.screen({
         (any ? '<div class="section-title"><h3>What the target state would show</h3>'+ui.pill('Not live','grey')+'</div>'+tracks : '')
       : ui.banner('<b>Target:</b> each insurer sends status back on a common data standard, so this updates without anyone chasing.', '', 'trend')+tracks;
     return '<div class="app">'+ui.appbar({title:'Your applications', sub:ctx.today?'What we can see today':'Live from each insurer', back:'C01'})+
-      '<div class="app-body stack s16">'+body+giCard+
-        (pending ? '<div class="pb-presenter"><span>Presenter:</span>'+ui.btn('Two days later ▸', {act:'issue'}, 'secondary sm')+'</div>' : '')+
+      '<div class="app-body stack s16">'+body+debit+giCard+
+        (pending ? '<div class="pb-presenter"><span>Presenter:</span>'+ui.btn('Skip to '+IJP.STORY.decided+' ▸', {act:'issue'}, 'secondary sm')+'</div>' : '')+
         ui.banner('Premiums and terms shown are illustrative. Each insurer decides its own application.', '', 'info')+
       '</div><div class="sticky-cta">'+ui.btn('See your protection view', {go:'C16'}, 'block'+(issued?'':' secondary'))+'</div></div>';
   }
@@ -8979,7 +9160,7 @@ IJP.screen({
 /* What was issued: the products frozen with each track at submission (IJP.issuedItems), never the live cart or the current
    quote, so this view agrees with the issued schedules (X06, X07) and the holdings. */
 function covered(s, id){
-  const k = id==='intl' ? 'intl' : 'life', t = s.tracks[k]; if(t.stage!=='issued' || t.outcome==='declined') return null;
+  const k = id==='intl' ? 'intl' : 'life', t = s.tracks[k]; if(!IJP.inForce(t)) return null;
   const it = IJP.issuedItems(s, k).find(x => x.id===id); if(!it) return null;
   return {it, q:it.q || {}, partial: t.outcome==='rated' || t.outcome==='exclusion'};
 }
@@ -9028,9 +9209,9 @@ IJP.screen({
     const changed = pr.areas.filter(a => a.a[0]!==a.b[0]).length;
     const groups = [['life','The life insurer'],['intl','The international health insurer']].map(([k,nm]) => {
       const items = IJP.issuedItems(s, k);
-      if(t[k].stage==='issued' && t[k].outcome!=='declined') return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(k)+ui.pill('Issued','ok')+'</div>'+items.map(i => polRow(i, t[k])).join('')+ui.distributedBy(k)+'</div>';
+      if(IJP.inForce(t[k])) return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(k)+ui.pill('Issued','ok')+'</div>'+items.map(i => polRow(i, t[k])).join('')+ui.distributedBy(k)+'</div>';
       if(t[k].stage==='stopped') return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(k)+ui.pill('Stopped','bad')+'</div><p class="small">'+esc(t[k].reason||'')+'. No cover was applied for, so nothing is shown as new.</p></div>';
-      if(t[k].stage==='issued') return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(k)+ui.pill('Declined','bad')+'</div><p class="small">'+nm+' did not offer cover on this application.</p></div>';
+      if(IJP.declined(t[k])) return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(k)+ui.pill('Declined','bad')+'</div><p class="small">'+nm+' did not offer cover on this application, so no policy was issued.</p></div>';
       return '';
     }).join('');
     const giCard = t.gi.stage==='issued' ? '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag('gi')+ui.pill('Issued','ok')+'</div><div class="hstack between top small"><span><b class="ink">Travel</b><br><span class="muted">UK trip, December</span></span><span class="num muted">'+esc(t.gi.policyNo||'')+'</span></div>'+ui.distributedBy('gi')+'</div>' : '';
@@ -9242,10 +9423,10 @@ IJP.lastReview = s => { s = s || IJP.state; const pf = s.pf || {};
 /* ---------- holdings ---------- */
 const META = {
   'life-sav':{name:'Life insurer savings plan', kind:'Savings plan', icon:'wallet', carrier:'life', no:'••4417', premium:6000, sa:95000, lane:'advised',
-    dueStatus:true, due:'2 Nov 2026', dueIn:13, attention:true,
+    dueStatus:true, due:'2 Nov 2026', attention:true,
     benefits:['SGD 95,000 on death','Maturity value SGD 120,000 in 2031 (illustrative)','Worldwide cover']},
   'gi-home':{name:'General insurer home contents', kind:'Home insurance', icon:'home', carrier:'gi', no:'••8802', premium:380, sa:150000, lane:'DIY',
-    status:{t:'In force', k:'ok'}, due:'Renews 14 Nov 2026', dueIn:25,
+    status:{t:'In force', k:'ok'}, due:'Renews 14 Nov 2026',
     benefits:['Contents SGD 150,000','Four people insured','Singapore home']},
   'gi-motor':{name:'General insurer motor', kind:'Car insurance', icon:'shield', carrier:'gi', sa:0, lane:'DIY', status:{t:'In force', k:'ok'}, due:'See policy', dueIn:99}
 };
@@ -9260,11 +9441,12 @@ function holdings(s){
     const prem = m.premium!=null && p.premium==null ? m.premium : (p.premium||0), due = p.due || m.due;
     out.push({id:p.id, ref:'policy', name:m.name || (p.insurer+' '+String(p.type||'').toLowerCase()), kind:m.kind || p.type, icon:m.icon||'shield',
       carrier:m.carrier || (p.insurer==='The general insurer'?'gi':'life'), no:p.no || m.no || '••0000', premium:prem, freq:'year', sa: m.sa!=null ? m.sa : (p.death||0), lane: m.lane || (p.insurer==='The general insurer'?'DIY':'advised'),
-      status:m.dueStatus ? {t:'Premium due '+String(due||'').replace(/ \d{4}$/, ''), k:'warn'} : (m.status || {t:'In force', k:'ok'}), due:due || p.expiry || '', dueIn:m.dueIn!=null?m.dueIn:99, attention:!!m.attention,
+      /* Days to the due date from the one story clock (IJP.daysUntil), so the reminder moves as the story does. */
+      status:m.dueStatus ? {t:'Premium due '+String(due||'').replace(/ \d{4}$/, ''), k:'warn'} : (m.status || {t:'In force', k:'ok'}), due:due || p.expiry || '', dueIn:m.dueIn!=null ? m.dueIn : (IJP.daysUntil(due)!=null ? IJP.daysUntil(due) : 99), attention:!!m.attention,
       benefits:m.benefits || [p.benefit || p.type], who:p.who||[], cover:IJP.benefitsOf(p), issued:false});
   });
   /* Policies issued in this case: the products submitted at checkout (frozen with each track), never the current quote. */
-  ['intl','life'].forEach(k => { const t = tr[k]; if(!t || t.stage!=='issued' || t.outcome==='declined') return;
+  ['intl','life'].forEach(k => { const t = tr[k]; if(!IJP.inForce(t)) return;
     IJP.issuedItems(s, k).forEach(it => {
       const q = it.q || {}, adj = t.outcome==='rated' || t.outcome==='exclusion';
       const no = (t.policyNo ? '••'+String(t.policyNo).slice(-4) : ({life:'••5106', retail:'••7721', intl:'••3340'})[it.id]);
@@ -9806,7 +9988,7 @@ IJP.screen({
           '<button class="linkbtn small" data-go="M05">All your insights</button>'+
         '</div>';
     const c = s.checkout, consentWaiting = c.started && (c.consent.life==='requested' || c.consent.intl==='requested');
-    const t = s.tracks, anyTrack = t.life.stage!=='none' || t.intl.stage!=='none', issued = t.life.stage==='issued' || t.intl.stage==='issued';
+    const t = s.tracks, anyTrack = t.life.stage!=='none' || t.intl.stage!=='none', issued = IJP.inForce(t.life) || IJP.inForce(t.intl);
     const authWaiting = s.checks.clientAuth==='pending';
     const task = authWaiting
       ? '<button class="card tight hstack" style="width:100%;text-align:left;border-color:var(--gb-blue)" data-go="C09">'+I('shieldok')+'<div class="grow"><b class="ink">'+P.rm.first+' asked for your authorisation</b><div class="small muted">To share your details with the life insurer for advice'+(ctx.today?' · valid for a limited time':'')+'</div></div>'+I('chev','chev')+'</button>'
@@ -9854,7 +10036,7 @@ const COMPARE = [
 /* Each side's state, shared with the I08 guide hint so the two always agree: absent (nothing quoted), quoted (no completed
    application yet), removed (taken out of the cart or declined), active (back in the cart) or submitted (sent at checkout). */
 IJP.tripState = (s, k) => { const items = s.cart.filter(i => i.carrier===k), live = items.filter(i => i.status==='in'), tr = s.tracks[k], a = s.apps[k] || {status:'none'};
-  if(['submitted','underwriting','issued'].includes(tr.stage)) return 'submitted';
+  if(IJP.heldByCarrier(s, k)) return 'submitted';
   if(live.length) return 'active';
   if(items.length) return 'removed';
   return a.status==='none' ? 'absent' : 'quoted'; };
@@ -9948,7 +10130,8 @@ const lim = ctx => ctx.s.tracks.life.stage;
 const STAGES = ['Referral', 'Needs analysis (FNA)', 'Recommendation', 'Application', 'Issued'];
 function ananyaStage(ctx){
   const s = ctx.s, st = s.tracks.life.stage;
-  if(st==='issued') return s.tracks.life.outcome==='declined' ? 3 : 4;
+  if(IJP.declined(s.tracks.life)) return 3;
+  if(st==='issued') return 4;
   if(st==='submitted' || st==='underwriting') return 3;
   if(s.checkout.submitted && st==='stopped') return 3;
   if(IJP.inCart('life') || IJP.inCart('retail') || s.rec.done) return 2;
@@ -9958,7 +10141,7 @@ function ananyaStage(ctx){
 }
 function stageNote(ctx){
   const i = ananyaStage(ctx);
-  if(ctx.s.tracks.life.stage==='issued' && ctx.s.tracks.life.outcome==='declined') return 'Application declined at underwriting';
+  if(IJP.declined(ctx.s.tracks.life)) return 'Application declined at underwriting';
   return i<0 ? 'Not yet referred' : ['Referred by Marcus Tan, waiting for the needs analysis','In needs analysis with Priya','Recommendation made, quote in the bank cart','Application with underwriting','Issued'][i];
 }
 
@@ -9980,7 +10163,7 @@ function prios(ctx){
     (r[3] ? ui.btn(r[4], {go:r[3]}, 'secondary sm') : ui.btn('Open', {toast:'Illustrative: other clients are not part of this prototype'}, 'ghost sm'))+'</div>').join('') || '<div class="empty">Nothing here for this filter.</div>';
 }
 /* The small context subset sent back on "Back to RM Workstation" (example fields): defined once, rendered here and in R07. */
-IJP.specdashReturn = ctx => ({gaps: ctx.s.tracks.life.stage==='issued' ? 1 : 3, pipeline: ananyaStage(ctx)>=0 ? 14 : 13, last: IJP.storyTime()});
+IJP.specdashReturn = ctx => ({gaps: IJP.inForce(ctx.s.tracks.life) ? 1 : 3, pipeline: ananyaStage(ctx)>=0 ? 14 : 13, last: IJP.storyTime()});
 function returned(ctx){
   const rt = IJP.specdashReturn(ctx);
   if(ctx.today) return '<div class="specdash-ret stack s8"><div class="hstack">'+I('lock','s16')+'<b>Nothing comes back to Global Bank</b></div><p class="small muted">There is no data link from the dashboard to '+IJP.B.rmws+'. If the specialist wants the RM to know something, she writes or calls. Status and outcome of the application do not return either.</p><div class="hstack small"><span class="pill grey">0 fields</span><span class="muted">flow to the bank today</span></div></div>';
@@ -10018,7 +10201,7 @@ IJP.screen({
 const WARD = {private:'private hospitals', a:'Class A ward', b1:'Class B1 ward'};
 const pnames = ids => (ids||[]).map(m => IJP.person(m).name).join(', ');
 function lifeIssued(s){
-  const t = s.tracks.life, ok = t.stage==='issued' && t.outcome!=='declined', sent = IJP.issuedItems(s, 'life');
+  const t = s.tracks.life, ok = IJP.inForce(t), sent = IJP.issuedItems(s, 'life');
   return {ok, t, sent, life: ok ? sent.find(i => i.id==='life') : null, shield: ok ? sent.find(i => i.id==='retail') : null};
 }
 function houseHold(ctx){
@@ -10030,7 +10213,7 @@ function houseHold(ctx){
   if(L.ok){
     if(L.life){ const q = L.life.q || {}; rows.push([q.ci ? 'Term life with critical illness' : 'Term life', 'Ananya', 'Issued '+(t.at||IJP.storyTime()), terms ? 'warn' : 'ok', f.sgd(q.sa||0)+' for '+q.term+' years'+(q.ci?' · critical illness':'')+terms+' · policy '+esc(t.policyNo||'')]); }
     if(L.shield){ const q = L.shield.q || {}; rows.push(['Shield plan (illustrative)', pnames(L.shield.insured), 'Issued', 'ok', 'Integrated Shield plan · '+(WARD[q.tier]||'')]); }
-  } else if(t.stage==='issued' && L.sent.length){
+  } else if(IJP.declined(t) && L.sent.length){
     rows.push([kinds, pnames([...new Set(L.sent.flatMap(i => i.insured||[]))]), 'Declined', 'bad', 'The life insurer declined the application at underwriting; no policy was issued']);
   } else if(inflight){
     rows.push([kinds || 'Term life / Shield plan', pnames([...new Set(L.sent.flatMap(i => i.insured||[]))]) || 'Ananya and family', ui.trackLabel(t), 'warn', 'Applications with the life insurer\'s underwriters']);
@@ -10077,8 +10260,10 @@ IJP.screen({
         '<div class="small muted" style="margin-top:8px">The life insurer counts only what it holds. The full gap is in the Global Bank goals review, which the licensed specialist uses to advise.</div></div>'+
       '<div class="panel stack s8"><div class="hstack between"><h3>What the life insurer cannot see</h3>'+ui.pill(shared?'Summary shared via the case':'Not visible','grey')+'</div>'+
         (shared ? '<div class="small muted">Ananya agreed to share a summary of existing cover with the life insurer for this advice. Detail below is the summary only.</div>' : '<div class="small muted">Cover bought elsewhere is invisible here unless Ananya shares it through the case. Nothing is shown until she consents'+(ctx.today?', and today it is typed in by hand.':'.')+'</div>')+
-        '<div class="grid3">'+elsewhere.map(p => '<div class="card tight stack s4"><b class="ink small">'+esc(p.type)+'</b><span class="small muted">'+esc(p.insurer)+'</span>'+(shared ? '<span class="small">'+esc(p.benefit)+'</span>' : '<span class="small muted">'+I('eyeoff','s16')+' hidden from the life insurer</span>')+'</div>').join('')+
-        '<div class="card tight stack s4"><b class="ink small">Meera</b><span class="small muted">Cover held elsewhere is not visible to the life insurer unless the client shares it</span></div></div></div>';
+        /* Without current permission nothing derived from those policies is shown: no type, insurer, employer or country. */
+        (shared ? '<div class="grid3">'+elsewhere.map(p => '<div class="card tight stack s4"><b class="ink small">'+esc(p.type)+'</b><span class="small muted">'+esc(p.insurer)+'</span><span class="small">'+esc(p.benefit)+'</span></div>').join('')+
+          '<div class="card tight stack s4"><b class="ink small">Meera</b><span class="small muted">Cover held elsewhere is not visible to the life insurer unless the client shares it</span></div></div>'
+        : '<div class="card tight hstack top">'+I('eyeoff','s16')+'<span class="small muted">The client has not shared cover held elsewhere'+(IJP.heldByCarrier(s, 'life') ? ' for future use' : '')+'. Nothing about it is shown here: not what it is, who provides it or where.</span></div>')+'</div>';
     return frame(ctx,'R12', IJP.P.is.name+' (Global Bank insurance specialist)', 'Client view', 'Rao household · 4 members · Singapore', body);
   }
 });
@@ -10212,19 +10397,28 @@ const SV = {
   mind:'<circle cx="12" cy="12" r="9"/><path d="M8.5 14.5c1 1.2 2.1 1.8 3.5 1.8s2.5-.6 3.5-1.8M9 9.5h.01M15 9.5h.01"/>'
 };
 const ic = (name, cls) => SV[name] ? '<svg class="ico '+(cls||'')+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+SV[name]+'</svg>' : I(name, cls);
-const live = (s, k) => s.tracks[k] && s.tracks[k].stage==='issued' && s.tracks[k].outcome!=='declined';
+const live = (s, k) => IJP.inForce(s.tracks[k]);
 const inCartAny = (s, id) => s.cart.some(i => i.id===id && i.status==='in');
-/* Where each health purchase stands: open | cart | progress | covered. Once submitted, it reads the products frozen with the
-   track (IJP.issuedItems), so a later change to the cart or the quote never rewrites what was issued. */
+/* Where each health purchase stands: open | cart | progress | covered | held. Once submitted, it reads the products frozen
+   with the track (IJP.issuedItems), so a later change to the cart or the quote never rewrites what was issued. "held": the
+   insurer already holds an application from this case without this product (or declined it), so a second application with
+   it is not started here (IJP.healthCarrierHeld). The guide's hints read these same readers. */
 const sentItem = (s, k, item) => IJP.issuedItems(s, k).some(i => i.id===item);
 const buyState = (s, kind) => {
   const k = kind==='intl' ? 'intl' : 'life', item = kind==='intl' ? 'intl' : 'retail', t = s.tracks[k];
   if(sentItem(s, k, item) && live(s, k)) return 'covered';
   if(sentItem(s, k, item) && (t.stage==='submitted' || t.stage==='underwriting')) return 'progress';
   if(inCartAny(s, item) && t.stage==='none') return 'cart';
+  if(IJP.healthCarrierHeld(s, kind)) return 'held';
   return 'open';
 };
+/* The issued health products the screens show (W03, W07), from the frozen tracks. */
+const issuedHealth = s => ({intl:live(s,'intl') && sentItem(s,'intl','intl'), shield:live(s,'life') && sentItem(s,'life','retail'), giTrip:live(s,'gi')});
+/* W07's share answer belongs to one request: after a submission, an answer given for the earlier request is not reused. */
+const shareAns = s => { const h = H(s); return (h.shareCycle||0)===IJP.shareCycleNow(s) ? h.shareChoices : null; };
+IJP.hwBuyState = buyState; IJP.hwIssued = issuedHealth; IJP.hwShareAnswer = shareAns;
 const age = (yr) => IJP.P.client.age + (yr - 2026);
+const cap = x => String(x).charAt(0).toUpperCase()+String(x).slice(1);
 const andJoin = a => a.length < 2 ? a.join('') : a.slice(0,-1).join(', ')+' and '+a[a.length-1];
 
 /* Synthetic, client-side trends (never written to the case record). */
@@ -10253,7 +10447,7 @@ IJP.screen({
   prep(s, p){ if(p && (p.wear==='1' || p.wear==='0')) H(s).wearable = p.wear==='1'; },
   render(ctx){
     const s = ctx.s, h = H(s), f = ctx.fmt, wear = h.wearable, P = ctx.P;
-    const pol = s.cover.policies, nOver = pol.filter(x => x.country!=='SG' || x.employer).length;
+    const fc = IJP.familyCover(s), nOver = fc.abroad;
     const ben = ['life','intl','gi'].filter(k => live(s, k)).length;
     const persona = '<div class="stack s4"><div class="seg" role="radiogroup" aria-label="Wearable">'+
         '<button class="'+(wear?'on':'')+'" data-act="hw.wear" data-arg=\'true\' role="radio" aria-checked="'+wear+'">'+ic('pulse','s16')+' With a wearable</button>'+
@@ -10275,7 +10469,7 @@ IJP.screen({
     const deleted = h.deleted && !wear ? ui.banner('Your health data was deleted on '+esc(h.deleted)+'. Nothing is collected unless you switch it on again.', 'ok', 'okc') : '';
     const cover = '<button class="card hw-cover" data-go="C05">'+
         '<div class="hstack between top" style="width:100%"><div class="hstack top"><div class="icobox">'+I('shield')+'</div><div class="grow"><span class="eyebrow">Protect</span><b class="ink hw-ct">Your family\'s cover, wherever it was bought</b></div></div>'+I('chev','chev')+'</div>'+
-        '<div class="small muted">'+pol.length+' policies in your view, '+nOver+' of them from an employer or abroad. See who each one covers, and where.</div></button>';
+        '<div class="small muted">'+fc.count+' policies in your view, '+nOver+' of them from an employer or abroad. See who each one covers, and where.</div></button>';
     const boundary = '<button class="card hw-boundary" data-go="W06">'+
         '<div class="hstack top"><div class="icobox">'+I('lock')+'</div><div class="grow stack s4"><b>Your health data stays with you and the health partners you choose.</b>'+
         '<span class="small">Global Bank never uses it to decide what insurance to offer you or what you pay, and your RM never sees it.</span>'+
@@ -10431,7 +10625,7 @@ IJP.screen({
   },
   render(ctx){
     const s = ctx.s, h = H(s), t = s.tracks;
-    const intl = live(s,'intl') && sentItem(s,'intl','intl'), shield = live(s,'life') && sentItem(s,'life','retail'), giTrip = live(s,'gi');
+    const ih = issuedHealth(s), intl = ih.intl, shield = ih.shield, giTrip = ih.giTrip;
     const pending = ['life','intl'].some(k => t[k].stage==='submitted' || t[k].stage==='underwriting');
     const svc = (icon, tt, sub, btn) => '<div class="item"><div class="icobox">'+ic(icon)+'</div><div class="it-main"><span class="it-t">'+tt+'</span><span class="it-s">'+sub+'</span></div>'+btn+'</div>';
     const use = (k, label) => '<button class="btn secondary sm" data-act="hw.useBenefit" data-arg=\''+k+'\'>'+(label||'Open')+'</button>';
@@ -10489,6 +10683,7 @@ IJP.screen({
     const meeraFoot = meera==='covered'
       ? '<div class="banner ok">'+I('okc','s16')+'<div>Her international health plan is issued: virtual GP and private doctors in London (illustrative; check the policy terms).</div></div>'+go('See her plan\'s benefits', 'W03', 'secondary sm')
       : meera==='progress' || meera==='cart' ? '<div class="banner">'+I('clock','s16')+'<div>Her international medical application is under way with '+ctx.P.is.first+'.</div></div>'+go('Follow it', 'C15', 'secondary sm')
+      : meera==='held' ? '<div class="banner">'+I('info','s16')+'<div>The international health insurer declined her application in this case, so no policy was issued. '+ctx.P.is.first+' can talk you through other options.</div></div>'+go('Book a time with '+ctx.P.is.first, 'C08', 'secondary sm')
       : '<button class="btn secondary block" data-set="hw.buyFor=intl" data-go="W07">'+I('globe','s16')+'Health cover for Meera abroad</button>';
     const vik = h.invited.vikram ? ui.pill('Invited to the family step week','ok') : '<button class="btn ghost sm" data-set="hw.invited.vikram=true" data-toast="Invitation sent to Vikram">'+I('send','s16')+'Invite Vikram to the family step week</button>';
     return '<div class="app">'+ui.appbar({title:'Family health', sub:'Services for each of you, not scores', back:'W01'})+subtabs('W04')+
@@ -10689,23 +10884,38 @@ IJP.screen({
         fact:'Your employer plan covers the family in Singapore while you work there. '+P.is.first+' checks for overlap, so you don\'t pay twice.'}
     };
     const pol = t => esc((s.tracks[t]||{}).policyNo||'');
+    const nm = ids => andJoin(ids.map(x => IJP.person(x).name));
+    /* Who the issued Shield plan covers, from the frozen policy, and who in the family in Singapore it does not. */
+    const shieldIns = (IJP.issuedItems(s, 'life').find(i => i.id==='retail') || {insured:[]}).insured || [];
+    const notOn = ['ananya','vikram','kabir'].filter(x => !shieldIns.includes(x));
+    const heldTxt = id => { const k = OPT[id].k, t = s.tracks[k], nmK = k==='intl' ? B.health : B.life;
+      return (IJP.declined(t) ? cap(nmK)+' declined the application in this case at underwriting.' : 'Your application with '+nmK+' in this case was already submitted, without this cover.')+
+        ' A further application with the same insurer is arranged with '+P.is.first+' separately.'; };
     const card = id => {
       const o = OPT[id], state = st[id];
-      if(state==='covered') return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(o.k)+ui.pill('Issued','ok')+'</div><b class="ink">'+(id==='intl' ? 'Meera is already covered by '+B.health : 'The family is already covered by the '+B.shield+' (illustrative)')+'</b><div class="small muted">Policy '+pol(o.k)+'</div><div>'+go('See the health benefits', 'W03', 'secondary sm')+'</div></div>';
+      if(state==='covered') return '<div class="card stack s8"><div class="hstack between">'+ui.carrierTag(o.k)+ui.pill('Issued','ok')+'</div><b class="ink">'+(id==='intl' ? 'Meera is already covered by '+B.health : esc(nm(shieldIns))+(shieldIns.length===1?' is':' are')+' already covered by the '+B.shield+' (illustrative)')+'</b>'+
+        (id!=='intl' && notOn.length ? '<div class="small">Not on this plan: '+esc(nm(notOn))+'. Ask '+P.is.first+' about cover for '+(notOn.length===1 ? IJP.person(notOn[0]).name : 'them')+'.</div>' : '')+
+        '<div class="small muted">Policy '+pol(o.k)+'</div><div>'+go('See the health benefits', 'W03', 'secondary sm')+'</div></div>';
+      if(state==='held') return '<div class="card stack s8"><div class="hstack between"><b class="ink">'+o.t+'</b>'+ui.pill('Ask '+P.is.first,'grey')+'</div><div class="small muted">'+heldTxt(id)+'</div><div>'+go('Book a time with '+P.is.first, 'C08', 'secondary sm')+'</div></div>';
       if(state==='progress' || state==='cart') return '<div class="card stack s8"><div class="hstack between"><b class="ink">'+o.t+'</b>'+ui.pill(state==='cart'?'Waiting for checkout':'With the insurer','warn')+'</div><div class="small muted">'+(state==='cart' ? P.is.first+' has completed the application with you; it is in your cart for checkout.' : 'The application is with the insurer now.')+'</div><div>'+go('Follow it', 'C15', 'secondary sm')+'</div></div>';
       const on = h.buyFor===id;
       return '<button class="radio-card'+(on?' on':'')+'" data-set="hw.buyFor='+id+'" role="radio" aria-checked="'+on+'"><span class="rc-dot"></span><span class="grow stack s4"><span class="hstack between"><b class="ink">'+o.t+'</b>'+ui.carrierTag(o.k)+'</span>'+
         '<span class="small">'+o.s+'</span><span class="small strong ink">'+o.price+'</span><span class="tiny muted">'+o.more+'</span>'+(on ? '<span class="small hw-fact">'+I('info','s16')+' '+o.fact+'</span>' : '')+'</span></button>';
     };
-    const ok = h.buyFor && st[h.buyFor]==='open';
+    const ok = h.buyFor && st[h.buyFor]==='open', sa = shareAns(s);
     const share = ok ? '<div class="card stack s8"><b class="ink">Share these choices with '+P.is.first+' to prepare?</b><div class="small muted">She would see who the cover is for and the kind of cover. Nothing else: we don\'t ask about health here.</div>'+
-        '<div class="seg"><button class="'+(h.shareChoices===true?'on':'')+'" data-act="hw.shareChoices" data-arg=\'true\'>Yes, share</button><button class="'+(h.shareChoices===false?'on':'')+'" data-act="hw.shareChoices" data-arg=\'false\'>No, not yet</button></div>'+
-        '<div class="tiny muted">'+(h.shareChoices===false ? 'Fine. '+P.is.first+' will ask you in the session instead.' : h.shareChoices===true ? 'Shared when you book. You can change this until then.' : 'If you don\'t answer, nothing is shared.')+'</div></div>' : '';
+        '<div class="seg"><button class="'+(sa===true?'on':'')+'" data-act="hw.shareChoices" data-arg=\'true\'>Yes, share</button><button class="'+(sa===false?'on':'')+'" data-act="hw.shareChoices" data-arg=\'false\'>No, not yet</button></div>'+
+        '<div class="tiny muted">'+(sa===false ? 'Fine. '+P.is.first+' will ask you in the session instead.' : sa===true ? 'Shared when you book. You can change this until then.' : 'If you don\'t answer, nothing is shared.')+'</div></div>' : '';
     const steps = [['Book a time','With '+P.is.first+', and '+P.rm.first+' if you like'],['A needs check with '+P.is.first,'The regulated needs analysis, before any recommendation'],['Quote and application in the insurer\'s system','Health questions are asked here, and only here'],['One checkout on your phone','Consent, signature and payment'],['Policy issued','Its health benefits appear in your Health tab']];
     const next = '<div class="card stack s8"><h3>What happens next</h3><div class="timeline hw-tl">'+steps.map((x,i) => '<div class="tl-item'+(i===0?' cur':'')+'"><b class="ink">'+(i+1)+'. '+x[0]+'</b><div class="small muted">'+x[1]+'</div></div>').join('')+'</div></div>';
     const anyOpen = st.intl==='open' || st.local==='open';
-    const both = st.intl==='covered' && st.local==='covered';
-    const cta = !anyOpen ? (both ? '<button class="btn block" data-go="W03">See your health benefits</button>' : '<button class="btn block" data-go="C15">Follow your applications</button>')+'<div class="small muted center">Both are already arranged. Nothing to start here.</div>'
+    const both = st.intl==='covered' && st.local==='covered', under = ['cart','progress'].some(x => st.intl===x || st.local===x), anyCov = st.intl==='covered' || st.local==='covered';
+    /* A purchase started after an earlier one was submitted is a new application, with its own checkout (IJP.newCycle). */
+    const again = anyOpen && s.checkout.submitted ? ui.banner('<b>This starts a new application.</b> What was submitted earlier stays exactly as it is; '+P.is.first+' completes the new one with you, with its own checkout.', '', 'info') : '';
+    const cta = !anyOpen ? (both ? '<button class="btn block" data-go="W03">See your health benefits</button><div class="small muted center">'+(notOn.length ? 'Nothing to start here: ask '+P.is.first+' about cover for '+esc(nm(notOn))+'.' : 'Both are already arranged. Nothing to start here.')+'</div>'
+        : under ? '<button class="btn block" data-go="C15">Follow your applications</button><div class="small muted center">Nothing else to start here.</div>'
+        : anyCov ? '<button class="btn block" data-go="W03">See your health benefits</button><div class="small muted center">Nothing to start here: ask '+P.is.first+' about the rest.</div>'
+        : '<button class="btn block" data-go="C08">Book a time with '+P.is.first+'</button><div class="small muted center">Nothing to start here.</div>')
       : ok ? '<button class="btn block" data-act="path.health" data-arg=\''+h.buyFor+'\' data-go="C08">Ask '+P.is.first+' to complete it with me</button>'
       : '<button class="btn block" disabled>Ask '+P.is.first+' to complete it with me</button><div class="small muted center">Choose who the cover is for first.</div>';
     return '<div class="app">'+ui.appbar({title:'Health cover', sub:'Start it here, finish with a specialist', back:'W01'})+
@@ -10713,7 +10923,7 @@ IJP.screen({
         '<div class="card flat pale hstack top">'+I('user','s16')+'<div class="small"><b class="ink">Started by you, completed with a licensed specialist.</b> '+P.is.name+' is employed by the bank and licensed for life and health. It is the same quote, application, cart and one-sitting checkout as any advised purchase.</div></div>'+
         '<div class="stack s8"><h3>Who is it for?</h3><div class="stack s8" role="radiogroup">'+card('intl')+card('local')+'</div></div>'+
         '<div class="banner">'+I('lock','s16')+'<div><b>No health questions here.</b> The insurer asks them inside its own application, which you complete with '+P.is.first+'. Your answers go only to that insurer.</div></div>'+
-        share+(anyOpen ? next : '')+
+        again+share+(anyOpen ? next : '')+
         honest(ctx, B.health+' isn\'t live in '+B.market+' yet, and '+B.app+' has no way to start this: you would call '+P.rm.first+'. Advice on the life insurer\'s cover runs in its own system, with your details re-keyed.',
           'booking opens a case with your choices in '+B.rmws+'; '+P.is.first+' completes the quote and application in each insurer\'s system by single sign-on, and both come back to one cart and one checkout.')+
       '</div><div class="sticky-cta">'+cta+'<button class="btn ghost block" data-go="W01">Not now</button></div></div>';
@@ -10723,7 +10933,7 @@ IJP.screen({
    recorded together with the request itself (IJP.pathDisclose), when she asks Priya to complete it. Nothing reaches the
    bank about a request she has not shared. */
 IJP.action('hw.shareChoices', v => {
-  const s = IJP.state, h = H(s); v = v===true || v==='true'; h.shareChoices = v;
+  const s = IJP.state, h = H(s); v = v===true || v==='true'; h.shareChoices = v; h.shareCycle = IJP.shareCycleNow(s);
   IJP.pathDisclose(s);
 });
 })();
@@ -10742,7 +10952,9 @@ const IJP = window.IJP;
 const WHO_INTL_Q = 'Priya Nair, inside the international health insurer\'s quotation system on her iPad';
 const WHO_INTL_A = 'Priya Nair, inside the international health insurer\'s application system on her iPad';
 const WHO_LIFE = 'Priya Nair, inside the life insurer\'s system on her iPad';
-const picks = s => s.rec.done ? s.rec.pick : {intl:true, retail:true, life:true};
+const picks0 = s => s.rec.done ? s.rec.pick : {intl:true, retail:true, life:true};
+/* The life insurer's side mirrors the screens (IJP.lifePicks): once submitted, the products it was submitted with. */
+const picks = s => IJP.lifePicks ? IJP.lifePicks(s) : picks0(s);
 /* Mirrors the screens: an application the insurer already holds stays viewable after a withdrawal. */
 const lifeShared = s => IJP.shareOf(s, 'life')==='granted' || IJP.heldByCarrier(s, 'life');
 const intlOpen = s => IJP.shareOf(s, 'intl')==='granted' || IJP.heldByCarrier(s, 'intl');
@@ -10758,7 +10970,8 @@ const shareSteps = (s, backSel) => s.apps.intl.share==='declined'
 const lifeGate = {do:'Tap "Simulate: Ananya approves on her phone" (a presenter control): nothing is shown until she agrees to share with the life insurer', sel:'[data-act="cx.clientAuth"]'};
 
 /* The two applications, part by part (mirrors PARTS in screens/carrier.js). */
-const LIFE_QS = s => { const p = picks(s); return ['q1','q1v','q1k','q2','q3','q4','q5'].filter(q => (p.life || !['q3','q4'].includes(q)) && (p.retail || !['q1v','q1k'].includes(q))); };
+/* The questions on screen, one hospital question per person insured (IJP.lifeQs, from screens/carrier.js). */
+const LIFE_QS = s => IJP.lifeQs(s);
 const firstMissing = (a, keys) => keys.find(k => !a[k]);
 const PARTS = {
   intl:[
@@ -10792,9 +11005,10 @@ const PARTS = {
 function afterStep(ctx, k){
   const s = ctx.s, t = s.tracks[k], c = s.checkout, doc = k==='intl' ? 'X07' : 'X06', inCart = inCartK(s, k);
   const sel = go => '.cx-card [data-go="'+go+'"]';
+  if(IJP.declined(t)) return {do:'Tap "See the outcome": the insurer declined it, so no policy was issued', sel:sel(doc), to:doc};
   if(t.stage==='issued') return {do:'Tap "'+(k==='intl' ? 'See Meera\'s certificate' : 'See the policy schedule')+'"', sel:sel(doc), to:doc};
   if(t.stage==='stopped') return {do:'Tap "See the outcome"', sel:sel(doc), to:doc};
-  if(t.stage==='submitted' || t.stage==='underwriting') return {do:'Tap "Underwriting decision ▸ (two days later)" to see the insurer decide', sel:'[data-act="issue"]', to:doc};
+  if(t.stage==='submitted' || t.stage==='underwriting') return {do:'Tap "Underwriting decision ▸ ('+IJP.STORY.decided+')" to see the insurer decide', sel:'[data-act="issue"]', to:doc};
   if(c.started && inCart){
     const ready = c.consent[k]==='approved' && c.signed[k] && c.debit.status==='authorised';
     return {do:'Tap "'+(c.consent[k]!=='declined' && ready ? 'Back to Global Bank checkout to submit' : 'Back to Global Bank checkout')+'"', sel:sel('I12'), to:'I12'};
@@ -10819,6 +11033,14 @@ function appSteps(ctx, k){
     return [{do:'Tap "Next: '+nx.label+'"', sel:'.cx-next [data-tab]'}, packet]; }
   return [part.todo(ans, s), packet];
 }
+
+/* What happens after completion, by the carrier's track, so the narrative never calls a submitted application a draft. */
+const after = (s, k, pl) => { const t = s.tracks[k];
+  if(IJP.declined(t)) return 'Submitted at checkout, then declined: no policy was issued.';
+  if(t.stage==='issued') return 'Submitted at checkout; the policy is now issued.';
+  if(t.stage==='submitted' || t.stage==='underwriting') return 'Submitted at checkout; the insurer is now underwriting it.';
+  if(t.stage==='stopped') return 'Not submitted at checkout: '+String(t.reason||'stopped').toLowerCase()+'.';
+  return 'Then '+(pl ? 'the plans go' : 'it goes')+' into the bank\'s cart, unsubmitted.'; };
 
 /* ---------- X04 international health insurer: quotation system ---------- */
 IJP.hint('X04', ctx => {
@@ -10855,19 +11077,21 @@ IJP.hint('X05', ctx => {
   const s = ctx.s;
   return {
     who: WHO_INTL_A,
-    here: 'The international health insurer\'s application for Meera, completed in the sitting under Ananya\'s first consent (to share details for the quote and application). Meera answers her own health questions; those answers stay with the insurer. Then it goes into the bank\'s cart, unsubmitted.',
-    why: ctx.today ? 'The international health insurer is not connected in Singapore: this is the target. Nothing is submitted until the second consent, at checkout on Ananya\'s phone.' : 'The international health insurer gets nothing to decide on until the second consent: Ananya authorises submission at checkout, on her phone.',
+    here: 'The international health insurer\'s application for Meera, completed in the sitting under Ananya\'s first consent (to share details for the quote and application). Meera answers her own health questions; those answers stay with the insurer. '+after(s, 'intl', false),
+    why: s.tracks.intl.stage!=='none' ? (ctx.today ? 'The international health insurer is not connected in Singapore: this is the target. The second consent was given or refused at checkout, on Ananya\'s phone.' : 'The second consent, authorising submission, was given or refused at checkout on Ananya\'s phone.')
+      : ctx.today ? 'The international health insurer is not connected in Singapore: this is the target. Nothing is submitted until the second consent, at checkout on Ananya\'s phone.' : 'The international health insurer gets nothing to decide on until the second consent: Ananya authorises submission at checkout, on her phone.',
     next: !intlOpen(s) ? shareSteps(s, '.cx-bite [data-go="I06"]') : appSteps(ctx, 'intl')
   };
 });
 
 /* ---------- X07 international health insurer: policy issued (target) ---------- */
 IJP.hint('X07', ctx => {
-  const s = ctx.s, issued = s.tracks.intl.stage==='issued';
+  const s = ctx.s, issued = IJP.inForce(s.tracks.intl), dec = IJP.declined(s.tracks.intl);
   return {
     who: 'Priya Nair, inside the international health insurer\'s system on her iPad',
     here: issued
       ? 'The international health insurer, not the bank, has underwritten (decided whether and on what terms to cover) and issued Meera\'s membership certificate in its own system. Only the outcome type, such as standard or with an exclusion, returns to the bank, never the medical reason.'
+      : dec ? 'The international health insurer, not the bank, underwrote Meera\'s application and declined it, so no membership was issued and there is no certificate. Only the outcome type returns to the bank, never the medical reason.'
       : 'The international health insurer\'s certificate page, with no certificate yet. Nothing reaches the insurer until Ananya authorises submission at checkout; then it decides whether and on what terms to cover Meera. If she declined, it received nothing.',
     why: 'Not yet connected in Singapore: this is the target. In a referral model the insurer issues, and nothing returns to the bank.',
     terminal: true,
@@ -10929,15 +11153,15 @@ IJP.hint('X03', ctx => {
     : !lifeShared(s) ? [lifeGate] : appSteps(ctx, 'life');
   return {
     who: WHO_LIFE,
-    here: 'The life insurer\'s application, completed with Ananya part by part in the sitting, under her first consent (the client authorisation). Each person answers their own health questions, and those answers stay with the life insurer. Then the plans go into the bank\'s cart, unsubmitted.',
-    why: ctx.today ? 'Today Priya re-keys 46 fields by hand into the life insurer\'s own system, and client authorisation is a separate request that can take hours.' : '0 fields re-keyed: the case arrives pre-filled. Nothing reaches the life insurer for a decision until the second consent, at checkout on Ananya\'s phone.',
+    here: 'The life insurer\'s application, completed with Ananya part by part in the sitting, under her first consent (the client authorisation). Each person answers their own health questions, and those answers stay with the life insurer. '+after(s, 'life', true),
+    why: ctx.today ? 'Today Priya re-keys 46 fields by hand into the life insurer\'s own system, and client authorisation is a separate request that can take hours.' : s.tracks.life.stage!=='none' ? '0 fields re-keyed: the case arrived pre-filled. The second consent, authorising submission, was given or refused at checkout on Ananya\'s phone.' : '0 fields re-keyed: the case arrives pre-filled. Nothing reaches the life insurer for a decision until the second consent, at checkout on Ananya\'s phone.',
     next
   };
 });
 
 /* ---------- X06 life insurer: policy issued ---------- */
 IJP.hint('X06', ctx => {
-  const s = ctx.s, issued = s.tracks.life.stage==='issued', intl = s.tracks.intl.stage!=='none';
+  const s = ctx.s, issued = IJP.inForce(s.tracks.life), dec = IJP.declined(s.tracks.life), intl = s.tracks.intl.stage!=='none';
   const back = p => ({do:p+'"Back to Global Bank" (top right) to close the session', sel:'.ssobar [data-go="I15"]', to:'I15'});
   const next = !issued ? [{do:'Tap "Back to the application"', sel:'.cx-narrow [data-go="X03"]', to:'X03'}, {do:'Or tap "Status and outcome to Global Bank"', sel:'[data-go="G05"]', to:'G05'}, back('Or tap ')]
     : (intl ? [{do:'Tap "The other insurer\'s policy" to see Meera\'s certificate from the international health insurer', sel:'[data-go="X07"]', to:'X07'}, back('Or tap ')] : [back('Tap '), {do:'Or tap "Status and outcome to Global Bank"', sel:'[data-go="G05"]', to:'G05'}])
@@ -10946,6 +11170,7 @@ IJP.hint('X06', ctx => {
     who: WHO_LIFE,
     here: issued
       ? 'The life insurer, not the bank, has underwritten (decided whether and on what terms to cover) and issued the policy, in its own system. The schedule shows the plans, premium, outcome and a 14-day free-look, when Ananya can still change her mind.'
+      : dec ? 'The life insurer, not the bank, underwrote the application and declined it, so no policy was issued: no policy number and no schedule. Only the outcome type returns to the bank, never the medical reason.'
       : 'The life insurer\'s policy page, with no policy yet. Nothing reaches the insurer until Ananya authorises submission at checkout; then it decides whether and on what terms to cover. If she declined, it received nothing.',
     why: ctx.today ? 'Policy data reaches the bank in the policy feed, but status and outcome don\'t: a decline never shows up.' : 'Status and outcome come back the same day; the medical reason for any extra premium or exclusion stays with the life insurer.',
     terminal: true,
@@ -11428,7 +11653,7 @@ IJP.hint('X01', ctx => {
 
 /* ---------- I06 Recommendation space ---------- */
 IJP.hint('I06', ctx => {
-  const s = ctx.s, r = s.rec, sc = r.scope;
+  const s = ctx.s, r = s.rec, sc = r.scope, again = !s.checkout.submitted && ['life','intl'].some(k => IJP.heldByCarrier(s, k));
   /* The client-started health purchase carries one product from one insurer (same paths as the screen). */
   const ask = s.path==='health-intl' ? 'international medical cover for Meera, from the international health insurer'
     : s.path==='health-local' ? 'hospital cover in Singapore for the family (the life insurer\'s Shield plan)' : null;
@@ -11454,7 +11679,7 @@ IJP.hint('I06', ctx => {
   const picked = sel.length ? 'Now on: '+W[sel.length]+' product'+(sel.length===1?'':'s')+' from '+W[nC]+' insurer'+(nC===1?'':'s')+' ('+andList(sel.map(x => PRODN[x.k](x)))+').' : 'Nothing is switched on yet.';
   return {
     who: WHO_CLIENT,
-    here: ask ? 'The bank\'s recommendation space, after the needs analysis. Ananya asked for '+ask+', so Priya sets that up first, with each person\'s health cover by where they live. Any other gap is shown here; Ananya decides.'
+    here: ask ? 'The bank\'s recommendation space, after the needs analysis. Ananya asked for '+ask+', so Priya sets that up first, by where each person lives. '+(again ? 'A new application; earlier ones stay as submitted.' : 'Any other gap is shown here; Ananya decides.')
       : 'The bank\'s recommendation space, after the needs analysis. Priya sets each person\'s health cover by where they live, then switches products on or off. '+picked,
     why: ctx.today ? 'Today this space doesn\'t exist: advice runs in the life insurer\'s own system, and the international health insurer, for Meera, isn\'t connected in Singapore yet.' : 'Nobody is covered twice: the check under the scope flags any overlap. It prepares the advice; Priya recommends and is accountable.',
     next
@@ -11498,7 +11723,7 @@ IJP.hint('I08', ctx => {
   const other = ['intl','life'].find(k => !ks.includes(k)), sub = ks.length && ks.every(k => st(k)==='submitted');
   return {
   who: WHO_CLIENT,
-  here: sub ? 'The moment, in one picture: '+(ks.length===2 ? 'both round trips' : 'the round trip to '+CN[ks[0]])+' (quote and application in the insurer\'s own system) came back to the bank cart, and Ananya authorised each one at checkout: '+(ks.length===2 ? 'both are' : 'it is')+' now submitted.'+(other && ks.length===1 ? ' '+CN[other].charAt(0).toUpperCase()+CN[other].slice(1)+'\'s side '+(SAY[st(other)]||'has nothing in this cart')+'.' : '')
+  here: sub ? 'The moment, in one picture: '+(ks.length===2 ? 'both round trips' : 'the round trip to '+CN[ks[0]])+' (quote and application in '+(ks.length===2 ? 'each insurer\'s' : 'its')+' own system) came back to the bank cart and '+(ks.length===2 ? 'were' : 'was')+' authorised at checkout: '+(ks.length===2 ? 'both are' : 'it is')+' now submitted.'+(other && ks.length===1 ? ' '+CN[other].charAt(0).toUpperCase()+CN[other].slice(1)+' has nothing in this cart'+(st(other)==='removed' ? ' (removed)' : st(other)==='quoted' ? ' (quoted only)' : '')+'.' : '')
     : ks.length===2 ? 'The moment, in one picture: the international health insurer\'s round trip and the life insurer\'s round trip (quote and application in each insurer\'s own system) both land in one bank cart. The same specialist did both; each insurer saw only the details meant for it.'
     : ks.length===1 ? 'The moment, in one picture: the round trip to '+CN[ks[0]]+' (quote and application in its own system) has landed in the bank cart. '+CN[other].charAt(0).toUpperCase()+CN[other].slice(1)+'\'s side '+(SAY[st(other)]||'has nothing in this cart')+'.'
     : 'The moment, in one picture: each insurer\'s round trip (quote and application in its own system) lands in one bank cart. Nothing is in the cart now: '+['intl','life'].map(k => CN[k]+(st(k)==='removed' ? ' (removed)' : st(k)==='quoted' ? ' (quoted, application not completed)' : ' (not quoted yet)')).join(', ')+'.',
@@ -11525,6 +11750,7 @@ IJP.hint('I12', ctx => {
   else if(c.submitted) next = [{do:'Tap "Close the session"', sel:'[data-go="I15"]', to:'I15'}]
     .concat(s.tracks.life.stage!=='none' ? [{do:'Or tap "Life insurer: application status"', sel:'[data-go="X03"]', to:'X03'}] : [],
             s.tracks.intl.stage!=='none' ? [{do:'Or tap "International health insurer: application status"', sel:'[data-go="X05"]', to:'X05'}] : []);
+  else if(IJP.medicalOverlap(s).length) next = [{do:'Someone is on two medical plans in the cart. Tap "Back to the cart" and remove one', sel:'[data-go="I07"]', to:'I07'}];
   else if(!c.started) next = [{do:'Tap "Send authorisation requests to Ananya\'s phone"', sel:'[data-act="checkout.start"]'},
     {do:'Then tap "Open Ananya\'s phone": she approves each insurer there', sel:'[data-go="C13"]', to:'C13'}];
   else if(expired) next = [{do:'Tap "Send again" for the request that expired', sel:'[data-act="consent.set"]'}, phone];
@@ -11775,7 +12001,7 @@ IJP.hint('C01', ctx => {
   /* Task cards, in the order the home screen shows them. */
   if(s.checks.clientAuth==='pending') next.push({do:'Tap "Marcus asked for your authorisation" to answer it', sel:'[data-go="C09"]', to:'C09'});
   else if(c.started && (c.consent.life==='requested' || c.consent.intl==='requested')) next.push({do:'Tap "Your consent is needed": Priya sent one request per insurer', sel:'[data-go="C13"]', to:'C13'});
-  else if(t.life.stage==='issued' || t.intl.stage==='issued') next.push({do:'Tap "Your new cover is active"', sel:'[data-go="C16"]', to:'C16'});
+  else if(IJP.inForce(t.life) || IJP.inForce(t.intl)) next.push({do:'Tap "Your new cover is active"', sel:'[data-go="C16"]', to:'C16'});
   else if(t.life.stage!=='none' || t.intl.stage!=='none') next.push({do:'Tap "Applications in progress"', sel:'button.card[data-go="C15"]', to:'C15'});
   next.push(hidden
     ? {do:(next.length?'Or tap "':'Tap "')+(hid.kind==='item'?'Undo':'Turn back on')+'" to bring the insight card back', sel:'[data-act="'+hid.undo.act+'"]'}
@@ -12003,7 +12229,8 @@ IJP.hint('C13', ctx => {
   const decided = c.started && ks.length>0 && ks.every(k => c.consent[k]==='approved' || c.consent[k]==='declined');
   const anyOk = ks.some(k => c.consent[k]==='approved');
   let next;
-  if(open.length){ const k = open[0], down = ks.indexOf(k)>0 ? ' (scroll down)' : '';
+  if(!c.submitted && IJP.medicalOverlap(s).length) next = [{do:'Nothing to approve yet: Priya fixes the cart first (someone is on two medical plans). Tap the back arrow', sel:'[data-go="C01"]', to:'C01'}];
+  else if(open.length){ const k = open[0], down = ks.indexOf(k)>0 ? ' (scroll down)' : '';
     next = [{do:'Tap "Approve" on the request for '+CN[k]+down, sel:consentSel(k, 'approved')},
             {do:'Or tap "Decline" to see one insurer refused without blocking the other', sel:consentSel(k, 'declined')}];
     if(!c.submitted && ks.some(x => c.consent[x]==='requested'))
@@ -12062,7 +12289,7 @@ IJP.hint('C15', ctx => {
   const ks = ['life','intl'].filter(k => s.cart.some(i => i.carrier===k && i.status!=='removed') || t[k].stage!=='none');
   const pending = ks.some(k => t[k].stage==='submitted' || t[k].stage==='underwriting');
   const next = [];
-  if(pending) next.push({do:'As presenter, tap "Two days later ▸" to see the policies issued', sel:'[data-act="issue"]'});
+  if(pending) next.push({do:'As presenter, tap "Skip to '+IJP.STORY.decided+' ▸" to see the insurers decide', sel:'[data-act="issue"]'});
   next.push({do:(pending ? 'Then tap' : 'Tap')+' "See your protection view"', sel:'[data-go="C16"]', to:'C16'});
   if(ctx.today) next.push({do:'Or tap "Ask Marcus for an update": that is how it works today', sel:'[data-toast]'});
   return {who:WHO,
@@ -12173,6 +12400,8 @@ const WHO_RM_INSDESK = 'Marcus Tan, the relationship manager, in Insurance Desk 
 /* What each holding is, and whether it carries a need tag (same rules as the screen). */
 function items(s){
   const out = [], pf = s.pf || {tags:{}}, tg = id => !!(pf.tags && pf.tags[id] && pf.tags[id].need);
+  /* The screens' own list (IJP.holdings): issued products come from the frozen tracks, never the live cart. */
+  if(IJP.holdings) return IJP.holdings(s).map(h => ({id:h.id, carrier:h.carrier, tagged: h.ref==='policy' ? !!((s.cover.policies.find(p => p.id===h.id) || {}).need) : tg(h.id)}));
   s.cover.policies.filter(p => p.src==='bank').forEach(p => out.push({id:p.id, carrier: p.insurer==='The general insurer' ? 'gi' : 'life', tagged: !!p.need}));
   (s.cart||[]).forEach(it => { const t = s.tracks[it.carrier];
     if(it.status==='in' && t && t.stage==='issued' && t.outcome!=='declined') out.push({id:it.id, carrier:it.carrier, tagged:tg(it.id)}); });
@@ -12358,17 +12587,10 @@ IJP.hint('L01', ctx => {
 const IJP = window.IJP;
 const WHO = 'Ananya Rao, the client, on her iPhone';
 
-/* Read-only mirrors of the screen pack's own state readers (wellness.js), so each hint branches on what the screen shows. */
+/* The screen pack's own state readers (wellness.js: IJP.hwBuyState, IJP.hwIssued, IJP.hwShareAnswer), so each hint branches
+   on exactly what the screen shows: issued products from the frozen tracks, never the live cart. */
 const H = s => (s && s.hw) || {};
-const live = (s, k) => !!(s.tracks[k] && s.tracks[k].stage==='issued' && s.tracks[k].outcome!=='declined');
-const inCart = (s, id) => (s.cart||[]).some(i => i.id===id && i.status==='in');
-const buyState = (s, kind) => {
-  const k = kind==='intl' ? 'intl' : 'life', item = kind==='intl' ? 'intl' : 'retail', t = s.tracks[k] || {};
-  if(inCart(s, item) && live(s, k)) return 'covered';
-  if(inCart(s, item) && (t.stage==='submitted' || t.stage==='underwriting')) return 'progress';
-  if(inCart(s, item) && (!t.stage || t.stage==='none')) return 'cart';
-  return 'open';
-};
+const buyState = (s, kind) => IJP.hwBuyState(s, kind);
 
 /* ---------- W01 Health: home ---------- */
 IJP.hint('W01', ctx => {
@@ -12417,7 +12639,7 @@ IJP.hint('W02', ctx => {
 /* ---------- W03 Health benefits of your cover ---------- */
 IJP.hint('W03', ctx => {
   const s = ctx.s, t = s.tracks;
-  const intl = live(s,'intl') && inCart(s,'intl'), shield = live(s,'life') && inCart(s,'retail'), giTrip = live(s,'gi');
+  const ih = IJP.hwIssued(s), intl = ih.intl, shield = ih.shield, giTrip = ih.giTrip;
   const pending = ['life','intl'].some(k => t[k] && (t[k].stage==='submitted' || t[k].stage==='underwriting'));
   const base = {
     who: WHO,
@@ -12449,6 +12671,7 @@ IJP.hint('W04', ctx => {
   const s = ctx.s, h = H(s), meera = buyState(s, 'intl');
   const first = meera==='covered' ? {do:'On Meera\'s card, tap "See her plan\'s benefits"', sel:'.hw-meera [data-go="W03"]', to:'W03'}
     : meera==='open' ? {do:'On Meera\'s card, tap "Health cover for Meera abroad"', sel:'[data-set="hw.buyFor=intl"]', to:'W07'}
+    : meera==='held' ? {do:'On Meera\'s card, tap "Book a time with '+ctx.P.is.first+'": her application was declined', sel:'.hw-meera [data-go="C08"]', to:'C08'}
     : {do:'On Meera\'s card, tap "Follow it" to see her application', sel:'.hw-meera [data-go="C15"]', to:'C15'};
   const next = [first];
   if(!(h.invited || {}).vikram) next.push({do:'Or tap "Invite Vikram to the family step week"', sel:'[data-set="hw.invited.vikram=true"]'});
@@ -12499,18 +12722,23 @@ IJP.hint('W06', ctx => {
 IJP.hint('W07', ctx => {
   const s = ctx.s, h = H(s), is = ctx.P.is.first;
   const st = {intl:buyState(s,'intl'), local:buyState(s,'local')};
-  const anyOpen = st.intl==='open' || st.local==='open', both = st.intl==='covered' && st.local==='covered';
+  const anyOpen = st.intl==='open' || st.local==='open', both = st.intl==='covered' && st.local==='covered', sa = IJP.hwShareAnswer(s);
+  const under0 = ['cart','progress'].includes(st.intl) || ['cart','progress'].includes(st.local), anyCov = st.intl==='covered' || st.local==='covered';
   const ok = !!h.buyFor && st[h.buyFor]==='open';
-  const booked = s.path!=='hero' && s.booking && s.booking.status==='booked';
+  /* Booked for this request: the path matches the option chosen and nothing from it has been submitted yet. */
+  const booked = !s.checkout.submitted && s.path===(h.buyFor==='local' ? 'health-local' : 'health-intl') && s.booking && s.booking.status==='booked';
   const base = {
     who: WHO,
     here: 'Ananya starts a health purchase herself: international medical cover for Meera (the international health insurer) or retail medical for the family (Shield plan, illustrative). Priya, the bank\'s licensed insurance specialist, then completes the same quote, application, cart and checkout with her.',
     why: ctx.today ? 'No health questions here: the insurer asks them in its own application. Today the international health insurer isn\'t live in Singapore.'
                    : 'No health questions here: the insurer asks them only inside its own application, completed with Priya.'
   };
+  /* Same order as the screen's button: both covered, one under way, one covered, or neither can start here. */
   if(!anyOpen) return Object.assign(base, both
-    ? {terminal:true, next:[{do:'Both are covered. Tap "See your health benefits"', sel:'.sticky-cta [data-go="W03"]', to:'W03'}]}
-    : {next:[{do:'Both are already under way. Tap "Follow your applications"', sel:'.sticky-cta [data-go="C15"]', to:'C15'}]});
+    ? {terminal:true, next:[{do:'Both are taken up, so nothing starts here. Tap "See your health benefits"', sel:'.sticky-cta [data-go="W03"]', to:'W03'}]}
+    : under0 ? {next:[{do:'Nothing else to start here. Tap "Follow your applications"', sel:'.sticky-cta [data-go="C15"]', to:'C15'}]}
+    : anyCov ? {terminal:true, next:[{do:'Nothing to start here. Tap "See your health benefits"', sel:'.sticky-cta [data-go="W03"]', to:'W03'}]}
+    : {next:[{do:'Nothing to start here. Tap "Book a time with '+is+'" to talk it through', sel:'.sticky-cta [data-go="C08"]', to:'C08'}]});
   /* The other option's state: one under way (in the cart or with the insurer) or already covered. */
   const under = ['cart','progress'].includes(st.intl) || ['cart','progress'].includes(st.local);
   const covered = st.intl==='covered' || st.local==='covered';
@@ -12519,10 +12747,10 @@ IJP.hint('W07', ctx => {
   const cta = {do:'Tap "Ask '+is+' to complete it with me" to book her', sel:'[data-act="path.health"]', to:'C08'};
   if(ok && booked) return Object.assign(base, {next:[
     {do:'The request is booked: '+is+' completes it with her on the iPad. Tap "Not now" to go back to Health', sel:'.sticky-cta [data-go="W01"]', to:'W01'}]});
-  if(ok && h.shareChoices==null) return Object.assign(base, {next:[
+  if(ok && sa==null) return Object.assign(base, {next:[
     {do:'Answer "Share these choices with '+is+' to prepare?": tap "Yes, share" or "No, not yet"', sel:'[data-act="hw.shareChoices"][data-arg="true"]'}, cta].concat(side(false)).slice(0, 3)});
   if(ok) return Object.assign(base, {next:[cta,
-    {do:'Or change the share answer: "'+(h.shareChoices ? 'No, not yet' : 'Yes, share')+'"', sel:'[data-act="hw.shareChoices"][data-arg="'+(h.shareChoices ? 'false' : 'true')+'"]'}].concat(side(false)).slice(0, 3)});
+    {do:'Or change the share answer: "'+(sa ? 'No, not yet' : 'Yes, share')+'"', sel:'[data-act="hw.shareChoices"][data-arg="'+(sa ? 'false' : 'true')+'"]'}].concat(side(false)).slice(0, 3)});
   /* Nothing chosen yet: lead with a request already under way, then the options still open. */
   const radios = ['intl','local'].filter(k => st[k]==='open').map((k, i) => ({
     do:(i || under ? 'Or tap ' : 'Under "Who is it for?", tap ')+(k==='intl' ? '"Meera, studying in London"' : '"The family in Singapore"')+(under || covered ? ' to start the other one' : ''),
